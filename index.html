@@ -465,17 +465,17 @@ window.BG_DEFAULT_PW = "123456";
 
     <form class="gate-pane" id="gLogin" hidden autocomplete="on">
       <h2>Đăng nhập</h2>
-      <div class="gf"><label for="gEmail">Email trường (@ctump.edu.vn)</label><input id="gEmail" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="tenban@ctump.edu.vn" required></div>
+      <div class="gf"><label for="gEmail">Email (tenban.bv@ctump.edu.vn)</label><input id="gEmail" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Gõ tenban, tự thêm .bv@ctump.edu.vn" required></div>
       <div class="gf"><label for="gPass">Mật khẩu</label><div class="pw"><input id="gPass" type="password" autocomplete="current-password" required><button type="button" class="eye" data-eye="gPass" aria-label="Hiện mật khẩu">👁</button></div></div>
       <label class="remember"><input type="checkbox" id="gRemember" checked> Ghi nhớ email trên máy này</label>
       <button class="gbtn" type="submit">Đăng nhập</button>
       <div class="glinks"><span></span><button type="button" data-go="gReset">Quên mật khẩu?</button></div>
-      <p class="gnote">Tài khoản do người quản trị tạo cho từng thành viên của khoa. Chưa có tài khoản: báo người quản trị thêm email @ctump.edu.vn của bạn.</p>
+      <p class="gnote">Tài khoản do người quản trị tạo cho từng thành viên của khoa. Chưa có tài khoản: báo người quản trị thêm email .bv@ctump.edu.vn của bạn.</p>
     </form>
 
     <form class="gate-pane" id="gReset" hidden>
       <h2>Đặt lại mật khẩu</h2>
-      <div class="gf"><label for="rEmail">Email trường (@ctump.edu.vn)</label><input id="rEmail" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="gf"><label for="rEmail">Email (tenban.bv@ctump.edu.vn)</label><input id="rEmail" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <button class="gbtn" type="submit">Gửi email đặt lại mật khẩu</button>
       <div class="glinks"><button type="button" data-go="gLogin">← Quay lại đăng nhập</button></div>
       <p class="gnote">Một đường link đặt lại mật khẩu sẽ được gửi vào hộp thư @ctump.edu.vn của bạn (xem cả mục Thư rác). Mật khẩu mới cần ít nhất 6 ký tự.</p>
@@ -1517,8 +1517,8 @@ function openMembers(){
   if(!ME.admin) return;
   const w = document.createElement('div'); w.className = 'mod';
   w.innerHTML = `<div class="box" style="max-width:520px"><div class="row"><b style="font-size:16px">Thành viên được dùng công cụ</b><span style="flex:1"></span><button class="btn sm" data-mx>Đóng</button></div>
-    <p class="hint" style="margin:6px 0 0">Thêm email @ctump.edu.vn: công cụ tạo luôn tài khoản với mật khẩu ban đầu <b>${esc(Cloud.members.defaultPw)}</b>. Báo người đó đăng nhập và đổi sang mật khẩu riêng. Gỡ khỏi danh sách thì người đó không vào được nữa. Quản trị (${esc(Cloud.members.admins.join(', '))}) luôn có quyền.</p>
-    <form class="memf"><input type="text" name="em" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="tenban (tự thêm @ctump.edu.vn)" required aria-label="Email"><input name="nm" placeholder="Họ tên (không bắt buộc)" aria-label="Họ tên"><button class="btn pri" type="submit">+ Thêm</button></form>
+    <p class="hint" style="margin:6px 0 0">Thêm email (gõ tên trước .bv là đủ, công cụ tự thêm .bv@ctump.edu.vn): công cụ tạo luôn tài khoản với mật khẩu ban đầu <b>${esc(Cloud.members.defaultPw)}</b>. Báo người đó đăng nhập và đổi sang mật khẩu riêng. Gỡ khỏi danh sách thì người đó không vào được nữa. Quản trị (${esc(Cloud.members.admins.join(', '))}) luôn có quyền.</p>
+    <form class="memf"><input type="text" name="em" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="tenban (tự thêm .bv@ctump.edu.vn)" required aria-label="Email"><input name="nm" placeholder="Họ tên (không bắt buộc)" aria-label="Họ tên"><button class="btn pri" type="submit">+ Thêm</button></form>
     <div class="hint" data-mm style="margin:0 0 6px">Đang tải…</div><div class="meml" data-ml></div></div>`;
   document.body.appendChild(w);
   const load = async () => {
@@ -2306,9 +2306,11 @@ const ADMINS = (window.BG_ADMINS || []).map(e => e.toLowerCase());
 const DAYS_H = 31;   /* tải sẵn phiếu bàn giao 31 ngày gần nhất; cũ hơn bấm "Xem phiếu cũ hơn" */
 const DAYS_D = 62;   /* tải sẵn số liệu kíp trực 62 ngày gần nhất; cũ hơn tự tải khi chọn ngày */
 
-const DOMAIN = "@ctump.edu.vn", DEFAULT_PW = window.BG_DEFAULT_PW || "123456";
-/* gõ "tenban" cũng được: tự thêm @ctump.edu.vn */
-const normEmail = v => { v = String(v || "").trim().toLowerCase(); if(v && !v.includes("@")) v += DOMAIN; return v; };
+const DOMAIN = "@ctump.edu.vn", BV = ".bv", DEFAULT_PW = window.BG_DEFAULT_PW || "123456";
+/* gõ "tenban" cũng được: tự thêm .bv@ctump.edu.vn (gõ "tenban.bv" thì chỉ thêm @ctump.edu.vn; gõ đủ email thì giữ nguyên) */
+const normEmail = v => { v = String(v || "").trim().toLowerCase().replace(/@$/, ""); if(v && !v.includes("@")) v += (v.endsWith(BV) ? "" : BV) + DOMAIN; return v; };
+/* email thiếu ".bv" (vd tenban@ctump.edu.vn) → dạng email bệnh viện tenban.bv@ctump.edu.vn; không áp dụng thì trả null */
+const bvVariant = e => { const l = e.slice(0, -DOMAIN.length); return e.endsWith(DOMAIN) && l && !l.endsWith(BV) ? l + BV + DOMAIN : null; };
 const okDomain = e => e.endsWith(DOMAIN) && e.length > DOMAIN.length;
 const PANES = ["gLoading", "gNoConfig", "gLogin", "gReset", "gPending", "gError"];
 function pane(id){ PANES.forEach(p => $(p).hidden = p !== id); $("authGate").hidden = false; $("app").hidden = true; }
@@ -2450,16 +2452,21 @@ document.querySelectorAll("[data-signout]").forEach(b => b.onclick = () => signO
 document.querySelectorAll("#authGate [data-eye]").forEach(b => b.onclick = () => { const i = $(b.dataset.eye); i.type = i.type === "password" ? "text" : "password"; b.classList.toggle("on", i.type === "text"); });
 $("gLogin").onsubmit = async e => {
   e.preventDefault(); const f = e.target; msg("");
-  const em = normEmail($("gEmail").value), pw = $("gPass").value;
+  let em = normEmail($("gEmail").value); const pw = $("gPass").value;
   if(!okDomain(em)){ msg(ERR["bg/domain"]); return; }
   $("gEmail").value = em; busy(f, true); usedDefault = pw === DEFAULT_PW;
   try {
     try { await signInWithEmailAndPassword(auth, em, pw); }
     catch(err){
       /* lần đầu tiên: tài khoản quản trị chưa tồn tại → tạo bằng mật khẩu ban đầu */
+      const alt = bvVariant(em);
       if(ADMINS.includes(em) && pw === DEFAULT_PW && /invalid-credential|user-not-found/.test(err.code || "")){
         try { await createUserWithEmailAndPassword(auth, em, DEFAULT_PW); }
         catch(e2){ throw e2.code === "auth/email-already-in-use" ? err : e2; }
+      } else if(alt && /invalid-credential|user-not-found|invalid-email/.test(err.code || "")){
+        /* gõ thiếu ".bv": thử lại với email bệnh viện */
+        await signInWithEmailAndPassword(auth, alt, pw).catch(() => { throw err; });
+        em = alt; $("gEmail").value = em;
       } else throw err;
     }
     $("gPass").value = "";
