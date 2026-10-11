@@ -111,6 +111,10 @@ input:disabled,textarea:disabled{opacity:.8;background:var(--soft)}
 /* patients */
 .pc{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;background:var(--card);margin-bottom:8px;box-shadow:var(--shadow);scroll-margin-top:70px}
 .pc.lv-red{border-left-color:var(--red)}.pc.lv-amber{border-left-color:var(--amb)}.pc.lv-green{border-left-color:var(--grn)}
+.pc.lv-red{border-left-width:6px}.pc.lv-red .pc-top{background:var(--red-soft)}.pc.lv-amber .pc-top{background:var(--amb-soft)}
+.pc.lv-red .pc-h .who b{color:var(--red)}
+.pc-h .who b .lvi{margin-right:5px}
+.pill.red.hot{background:var(--red);color:#fff;font-weight:700}
 .pc-top{display:flex;align-items:center}
 .pc-top .pc-h{flex:1;min-width:0}
 .rm{flex:none;width:28px;height:28px;margin-right:8px;border:1px solid var(--line);background:var(--card);border-radius:7px;color:var(--red);cursor:pointer;font-weight:700;font-size:13px}
@@ -1602,7 +1606,7 @@ function editHTML(h){
     </section>
     <section class="sec">
       <h2>${N()} Bệnh nhân cần chú ý đặc biệt</h2>
-      <p class="hint">Tự tổng hợp từ những ca được đánh dấu <span class="dot red"></span>nặng lên hoặc <span class="dot amber"></span>theo dõi sát. Nội dung sửa trong phiếu từng bệnh nhân.</p>
+      <p class="hint">Tự tổng hợp từ những ca được đánh dấu <span class="dot red"></span>nặng lên hoặc <span class="dot amber"></span>theo dõi sát. ${isBS ? 'Lấy sẵn chẩn đoán, DHST và mục R trong phiếu từng bệnh nhân, không cần ghi thêm.' : 'Nội dung sửa trong phiếu từng bệnh nhân.'}</p>
       <div id="attn"></div>
     </section>
     <section class="sec">
@@ -1676,8 +1680,9 @@ function equipHTML(h, num){
 function headInner(p, h){
   const d = dayN(p.admit, h.date);
   const sub = [p.mrn ? 'BA ' + p.mrn : '', p.age ? p.age + ' tuổi' : '', d ? 'ngày HSTC thứ ' + d : '', p.dx].filter(Boolean).join(' · ');
-  const lv = p.level ? `<span class="pill ${p.level}">${LVS[p.level]}</span>` : '';
-  return `<div class="bed">${esc(p.bed) || '?'}</div><div class="who"><b>${esc(p.name) || '<span style="color:var(--muted);font-weight:500">Bệnh nhân mới</span>'}</b><small>${esc(sub) || '&nbsp;'}</small></div>${lv}${chev}`;
+  const lv = p.level ? `<span class="pill ${p.level}${p.level === 'red' ? ' hot' : ''}">${p.level === 'red' ? '▲ ' : ''}${LVS[p.level]}</span>` : '';
+  const icon = p.level === 'red' ? '<span class="lvi" aria-hidden="true">⚠</span>' : '';
+  return `<div class="bed">${esc(p.bed) || '?'}</div><div class="who"><b>${icon}${esc(p.name) || '<span style="color:var(--muted);font-weight:500">Bệnh nhân mới</span>'}</b><small>${esc(sub) || '&nbsp;'}</small></div>${lv}${chev}`;
 }
 function pcWrap(p, i, h, body){
   return `<div class="pc ${p.open?'open':''} lv-${p.level||'none'}" id="pc-${p.id}">
@@ -1723,11 +1728,6 @@ function pcBS(p, i, h){
   </div></div>
   <div class="row" style="margin-top:10px"><span class="lab">Mức độ</span>${seg(P+'level', p.level, [['red','Nặng lên','lv-red'],['amber','Theo dõi sát','lv-amber'],['green','Ổn định','lv-green']])}</div>
   <div class="row"><span class="lab">Dị ứng</span>${seg(P+'allergy', p.allergy, [['no','Không'],['yes','Có']])}${p.allergy==='yes' ? `<div style="flex:1;min-width:180px">${inp(P+'allergyText', p.allergyText, {ph:'Dị ứng với…'})}</div>` : ''}</div>
-  ${lvl ? `<div class="focus"><div class="ttl">Ghi vào bảng “Bệnh nhân cần chú ý đặc biệt”</div><div class="grid">
-    ${fld('Vấn đề chính', P+'focus.problem', f.problem, {w:'wf'})}
-    ${fld('Theo dõi gì', P+'focus.monitor', f.monitor)}
-    ${fld('Ngưỡng gọi BS', P+'focus.call', f.call)}
-  </div></div>` : ''}
   <div class="row" style="margin-top:12px">${chk('Không thay đổi so với kíp trước (chỉ ghi DHST, bilan và mục R)', P+'unchanged', p.unchanged, {rr:1})}</div>`;
   if(p.unchanged){
     body += `<div class="unch">Tình huống, bối cảnh và đánh giá giữ nguyên như kíp trước. Chỉ cần cập nhật dấu hiệu sinh tồn, bilan dịch ở trên và mục R bên dưới.</div>`;
@@ -1877,10 +1877,15 @@ function bodyMap(p, i){
 }
 
 /* ================= DERIVED (no full re-render) ================= */
+/* DHST gọn một dòng cho bảng chú ý */
+const vsLine = v => hasVS(v) ? [v.bp && 'HA ' + v.bp, v.hr && 'M ' + v.hr, v.spo2 && 'SpO₂ ' + v.spo2 + '%', v.t && 'T ' + v.t + '°C'].filter(Boolean).join(' · ') : '';
 function attnHTML(h){
   const isBS = h.part === 'bs';
   const rows = h.patients.filter(p => p.level === 'red' || p.level === 'amber').sort((a,b) => (a.level===b.level ? natCmp(a.bed,b.bed) : a.level==='red' ? -1 : 1));
   if(!rows.length) return `<div class="empty" style="padding:10px">Chưa có ca nào được đánh dấu nặng lên hoặc theo dõi sát.</div>`;
+  if(isBS) return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>Chẩn đoán</th><th>DHST lúc bàn giao</th><th>Dặn kíp sau</th></tr></thead><tbody>
+    ${rows.map(p => `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Chẩn đoán">${esc(p.dx)||'—'}</td><td data-l="DHST">${esc(vsLine(p.vs))||'—'}</td><td data-l="Dặn kíp sau">${esc(rText(p, 'bs'))||'—'}</td></tr>`).join('')}
+  </tbody></table>`;
   const c3 = isBS ? 'Theo dõi gì' : 'Cách theo dõi / chăm sóc', c4 = isBS ? 'Ngưỡng gọi BS' : 'Báo BS khi';
   return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>${isBS?'Vấn đề chính':'Vấn đề cần lưu ý'}</th><th>${c3}</th><th>${c4}</th></tr></thead><tbody>
     ${rows.map(p => { const f = p.focus||{}; return `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Vấn đề">${esc(f.problem)||'—'}</td><td data-l="${c3}">${esc(isBS ? f.monitor : f.care)||'—'}</td><td data-l="${c4}">${esc(f.call)||'—'}</td></tr>`; }).join('')}
@@ -1896,7 +1901,7 @@ function checks(h){
     if(!normT(p.mrn)) out.push(`${who}: chưa ghi mã bệnh án`);
     else if(h.patients.some((q, j) => j !== i && normT(q.mrn) === normT(p.mrn))) out.push(`${who}: mã bệnh án ${p.mrn} bị trùng với BN khác trong phiếu`);
     if(!p.level) out.push(`${who}: chưa chọn mức độ`);
-    if((p.level === 'red' || p.level === 'amber') && !(p.focus && p.focus.call)) out.push(`${who}: ca ${LVS[p.level].toLowerCase()} chưa ghi “${h.part==='bs'?'Ngưỡng gọi BS':'Báo BS khi'}”`);
+    if(h.part === 'dd' && (p.level === 'red' || p.level === 'amber') && !(p.focus && p.focus.call)) out.push(`${who}: ca ${LVS[p.level].toLowerCase()} chưa ghi “${h.part==='bs'?'Ngưỡng gọi BS':'Báo BS khi'}”`);
     if(h.part === 'bs'){
       if(!p.allergy) out.push(`${who}: chưa ghi dị ứng`);
       if(!hasVS(p.vs)) out.push(`${who}: chưa ghi dấu hiệu sinh tồn lúc bàn giao`);
@@ -2149,7 +2154,7 @@ function summaryText(h, ab){
     L.push(''); L.push(t);
     ps.forEach(p => {
       const f = p.focus||{}; L.push(line(p));
-      const det = [f.problem && 'Vấn đề: ' + f.problem, (isBS ? f.monitor : f.care) && (isBS ? 'Theo dõi: ' + f.monitor : 'Chăm sóc: ' + f.care), f.call && (isBS ? 'Gọi BS khi: ' : 'Báo BS khi: ') + f.call].filter(Boolean);
+      const det = isBS ? [] : [f.problem && 'Vấn đề: ' + f.problem, (isBS ? f.monitor : f.care) && (isBS ? 'Theo dõi: ' + f.monitor : 'Chăm sóc: ' + f.care), f.call && (isBS ? 'Gọi BS khi: ' : 'Báo BS khi: ') + f.call].filter(Boolean);
       if(det.length) L.push('   ' + det.join(' | '));
       if(isBS && hasVS(p.vs)){ const v = p.vs; L.push(`   ❤ DHST: HA ${v.bp||'–'} · M ${v.hr||'–'} · SpO₂ ${v.spo2||'–'}% · T ${v.t||'–'}°C`); }
       const fl = p.fluid || {}, bl = balOf(fl);
@@ -2204,7 +2209,9 @@ function printHTML(h){
     <div class="rt">Kíp trực: <b>${fmtD(h.date)}</b> (7:00 → 7:00 ${fmtDM(addDays(h.date, 1))})<br>${R} bàn giao: <b>${pv(h.giver)}</b><br>${R} nhận: <b>${pv(h.receiver)}</b></div></div>`;
   o += `<div class="pr-sec"><h3>1. Số liệu kíp trực</h3><div class="stats">${STATS[h.part].map(([k,l,a]) => `<div>${l}: <b>${pv(statVal(h,k,a))}</b></div>`).join('')}</div>${(h.out||[]).length ? `<div style="margin-top:3px"><span class="k">BN rời khoa trong kíp:</span> ${h.out.map(x => `G${esc(x.p.bed)} ${esc(x.p.name)}${x.p.mrn ? ' (BA ' + esc(x.p.mrn) + ')' : ''} – ${outName(x.reason).toLowerCase()}`).join('; ')}</div>` : ''}</div>`;
   const att = h.patients.filter(p => p.level === 'red' || p.level === 'amber').sort((a,b) => (a.level===b.level ? natCmp(a.bed,b.bed) : a.level==='red' ? -1 : 1));
-  o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:22%">Giường / Họ tên</th><th style="width:12%">Mức độ</th><th>${isBS?'Vấn đề chính':'Vấn đề cần lưu ý'}</th><th>${isBS?'Theo dõi gì':'Cách theo dõi / chăm sóc'}</th><th>${isBS?'Ngưỡng gọi BS':'Báo BS khi'}</th></tr>
+  if(isBS) o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:20%">Giường / Họ tên</th><th style="width:11%">Mức độ</th><th style="width:22%">Chẩn đoán</th><th style="width:20%">DHST lúc bàn giao</th><th>Dặn kíp sau</th></tr>
+    ${att.length ? att.map(p => `<tr><td><b>${esc(p.bed)}</b> · ${esc(p.name)}</td><td class="lvb ${p.level}">● ${LVS[p.level]}</td><td>${esc(p.dx)}</td><td>${esc(vsLine(p.vs))}</td><td>${esc(rText(p, 'bs'))}</td></tr>`).join('') : `<tr><td colspan="5" class="em">Không có</td></tr>`}</table></div>`;
+  else o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:22%">Giường / Họ tên</th><th style="width:12%">Mức độ</th><th>${isBS?'Vấn đề chính':'Vấn đề cần lưu ý'}</th><th>${isBS?'Theo dõi gì':'Cách theo dõi / chăm sóc'}</th><th>${isBS?'Ngưỡng gọi BS':'Báo BS khi'}</th></tr>
     ${att.length ? att.map(p => { const f = p.focus||{}; return `<tr><td><b>${esc(p.bed)}</b> · ${esc(p.name)}</td><td class="lvb ${p.level}">● ${LVS[p.level]}</td><td>${esc(f.problem)}</td><td>${esc(isBS?f.monitor:f.care)}</td><td>${esc(f.call)}</td></tr>`; }).join('') : `<tr><td colspan="5" class="em">Không có</td></tr>`}</table></div>`;
   if(isBS){
     o += `<div class="pr-sec"><h3>3. Sự cố y khoa trong kíp</h3>${h.inc.has==='yes' ? `☒ Có: ${pv(h.inc.text)} · ${box(h.inc.reported,'Đã báo cáo')}` : h.inc.has==='no' ? '☒ Không' : '☐ Không ☐ Có'}</div>`;
