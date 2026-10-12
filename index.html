@@ -408,6 +408,7 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
   .pt{width:100%;border-collapse:collapse;font-size:8.7pt}
   .pt th,.pt td{border:.6pt solid #888;padding:2.5px 4px;vertical-align:top;text-align:left}
   .pt th{background:#e8eef0;font-size:8pt}
+  .pt .tg{display:block;font-size:7pt;color:#555;line-height:1.15;margin-bottom:1px}
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));border:.6pt solid #888}
   .stats div{padding:3px 5px;border-right:.6pt solid #bbb;border-bottom:.6pt solid #bbb;font-size:8.7pt}
   .stats b{font-size:10pt}
@@ -1477,8 +1478,10 @@ function cvPrint(){
   const rw = sel('range') || sel('week') || sel('two') || rows[0], day = rw.key === 'day';
   const L = ['cc','hs'].flatMap(d => periodCV(d, rw.dates).map(x => Object.assign({ khoa:DEPT[d].name }, x))).sort((a, b) => a.date.localeCompare(b.date));
   const tot = ['cc','hs'].reduce((s, d) => { const o = agg(d, rw.dates); return s + (o ? o.cv : 0); }, 0);
-  const F = [['khoa','Khoa'], ...CVF];
-  return `<div class="iisec"><h4>❖ Bệnh chuyển viện${day ? '' : ` – ${rw.label.toLowerCase()} (${rw.sub})`}: ${L.length} BN${tot !== L.length ? ` <span class="k">(bảng số liệu ghi ${tot} BN)</span>` : ''}</h4>${listTable(L, F, !day)}</div>`;
+  /* ngày kíp và khoa ghi nhỏ phía trên tên BN (một kíp thì chỉ ghi khoa) */
+  const table = !L.length ? `<div class="em">Không có</div>` : `<table class="pt"><tr><th style="width:4%">TT</th>${CVF.map(([f, l]) => `<th${f === 'age' ? ' style="width:7%"' : f === 'name' ? ' style="width:22%"' : ''}>${l}</th>`).join('')}</tr>
+    ${L.map((x, i) => `<tr><td>${i + 1}</td>${CVF.map(([f]) => f === 'name' ? `<td><span class="tg">${day ? '' : fmtDM(x.date) + ' – '}${esc(x.khoa)}</span>${esc(x.name)}</td>` : `<td>${esc(x[f])}</td>`).join('')}</tr>`).join('')}</table>`;
+  return `<div class="iisec"><h4>❖ Bệnh chuyển viện${day ? '' : ` – ${rw.label.toLowerCase()} (${rw.sub})`}: ${L.length} BN${tot !== L.length ? ` <span class="k">(bảng số liệu ghi ${tot} BN)</span>` : ''}</h4>${table}</div>`;
 }
 function hsPrint(suf){
   suf = suf || '';
