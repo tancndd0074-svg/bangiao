@@ -161,11 +161,11 @@ input[data-k$=".fluid.bal"]::placeholder{color:var(--pri);opacity:.8;font-weight
 .unch{margin-top:10px;font-size:12.5px;padding:10px 12px;border-radius:10px;background:var(--pri-soft);color:var(--pri)}
 /* tubes */
 .tubes{display:grid;gap:8px}
-.tube{display:grid;grid-template-columns:150px 1fr 160px 1fr;gap:8px;align-items:end;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.tube{display:grid;grid-template-columns:150px 1fr 150px 118px 1fr;gap:8px;align-items:end;padding-bottom:8px;border-bottom:1px dashed var(--line)}
 .tube:last-child{border-bottom:0}
 .tube>b{font-size:13px;align-self:center}
 .tube .dw{font-size:11.5px;color:var(--muted)}
-.tube.dr{grid-template-columns:150px 1fr 150px 130px 1fr}
+.tube.dr{grid-template-columns:130px 1fr 150px 118px 110px 1fr}
 .dsum{font-size:12.5px;color:var(--pri);margin-top:4px}
 /* body map */
 .bm{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
@@ -182,10 +182,10 @@ input[data-k$=".fluid.bal"]::placeholder{color:var(--pri);opacity:.8;font-weight
 .sedb{gap:6px}.sedr{display:grid;grid-template-columns:1fr 80px auto 34px;gap:6px;align-items:center}.sedr .u{font-size:12px;color:var(--muted)}
 .mi .sym{font-weight:700;width:34px;text-align:center}
 .mi select{width:auto;min-height:34px;padding:4px 6px}
-.mi2{display:grid;grid-template-columns:1fr 1.15fr 1.25fr;gap:6px;margin:-2px 0 4px 40px;padding:6px 8px;border-radius:8px;background:var(--card2)}
+.mi2{display:grid;grid-template-columns:1fr 1.15fr 1.25fr .8fr;gap:6px;margin:-2px 0 4px 40px;padding:6px 8px;border-radius:8px;background:var(--card2)}
 .mi2 .f>span{font-size:11.5px}.mi2 select{width:100%;min-height:34px}
 .mi2 .vipw{grid-column:1/-1;font-size:12px;color:var(--amb);font-weight:600}.mi2 .vipw.bad{color:var(--red)}
-@media (max-width:560px){.mi2{grid-template-columns:1fr 1fr;margin-left:0}.mi2 .f.dt{grid-column:1/-1}}
+@media (max-width:560px){.mi2{grid-template-columns:1fr 1fr;margin-left:0}}
 .sym.line{color:var(--blue)}.sym.drain{color:var(--org)}.sym.ulcer{color:var(--red)}
 .tool button{font-weight:600}
 .risk{font-size:11.5px;font-weight:700}
@@ -211,7 +211,7 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
   table.at tr{display:block;border-bottom:1px solid var(--line);padding:8px 0}
   table.at td{display:block;border:0;padding:2px 0}
   table.at td[data-l]::before{content:attr(data-l)": ";color:var(--muted);font-size:12px;font-weight:650}
-  .tube,.tube.dr{grid-template-columns:1fr 1fr}.tube>b{grid-column:1/-1}.tube .tst{grid-column:1/-1}
+  .tube,.tube.dr{grid-template-columns:1fr 1fr}.tube>b{grid-column:1/-1}.tube .tst{grid-column:1/-1}.tube>b+.f{grid-column:1/-1}.tube.dr .tst{grid-column:auto}
   .bm>div:first-child{width:100%}.tool{display:flex}.tool button{flex:1;padding:7px 4px;white-space:nowrap;font-size:13px}.maps{justify-content:center}
   .f.w2{grid-column:1/-1}
   .newrow{grid-template-columns:1fr 1fr;gap:8px}.newbtn small{display:none}.newbtn{padding:10px 12px}
@@ -679,6 +679,16 @@ function fmtD(iso){ if(!iso) return ''; const [y,m,d] = iso.split('-'); return `
 function hhmm(d){ return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
 function fmtTS(ts){ if(!ts) return ''; const d = new Date(ts); return hhmm(d) + ' ' + String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); }
 function dayN(from, to){ if(!from || !to) return null; const n = Math.round((Date.parse(to) - Date.parse(from))/864e5) + 1; return isFinite(n) ? n : null; }
+/* số ngày lưu ống/đường truyền tính theo kíp trực 7:00 → 7:00: đặt trước 7:00 sáng thuộc kíp hôm trước.
+   Kíp đặt là ngày 1; không ghi giờ thì tính theo ngày đặt. */
+function dwellDays(date, time, kip){
+  if(!date) return null;
+  let d = date;
+  if(/^\d{1,2}:\d{2}/.test(time || '') && String(time).padStart(5, '0') < '07:00'){ const x = new Date(date + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 1); d = x.toISOString().slice(0, 10); }
+  return dayN(d, kip);
+}
+/* "08/10/2026 22:30" — ngày đặt kèm giờ (nếu có) */
+const whenText = (date, time) => date ? fmtD(date) + (filled(time) ? ' ' + time : '') : '';
 function getP(o, path){ return path.split('.').reduce((a,k)=> a == null ? undefined : a[k], o); }
 function setP(o, path, v){ const ks = path.split('.'); let a = o; for(let i=0;i<ks.length-1;i++){ if(a[ks[i]] == null) a[ks[i]] = {}; a = a[ks[i]]; } a[ks[ks.length-1]] = v; }
 function abbr(name){ const w = String(name||'').trim().split(/\s+/).filter(Boolean); if(!w.length) return ''; return w.map(x => x[0].toUpperCase()).join('.'); }
@@ -840,7 +850,7 @@ const LINE_KIND = ['Ngoại vi', 'CVC', 'PICC', 'Động mạch', 'Catheter lọ
 /* VIP score (Visual Infusion Phlebitis): 0 bình thường · 1 theo dõi · ≥2 rút, đặt lại vị trí khác */
 const VIP = [['0','0 · Bình thường'],['1','1 · Nghi viêm'],['2','2 · Viêm sớm'],['3','3 · Viêm vừa'],['4','4 · Viêm tiến triển'],['5','5 · Viêm tắc mạch']];
 function vipNote(v){ const n = parseInt(v, 10); return !isFinite(n) || n < 1 ? '' : n === 1 ? 'VIP 1: theo dõi sát vị trí đặt' : 'VIP ≥ 2: rút kim, đặt lại ở vị trí khác'; }
-function lineText(mk, h){ const d = dayN(mk.date, h.date); return [mk.kind, filled(mk.vip) ? 'VIP ' + mk.vip : '', mk.date ? 'đặt ' + fmtDM(mk.date) + (d ? ' (' + d + 'n)' : '') : ''].filter(Boolean).join(' · '); }
+function lineText(mk, h){ const d = dwellDays(mk.date, mk.time, h.date); return [mk.kind, filled(mk.vip) ? 'VIP ' + mk.vip : '', mk.date ? 'đặt ' + fmtDM(mk.date) + (filled(mk.time) ? ' ' + mk.time : '') + (d ? ' (' + d + 'n)' : '') : ''].filter(Boolean).join(' · '); }
 
 function newHandover(part){
   const h = { id:uid(), part, date:reportDay(), shift:'', giver:'', receiver:'', head:'', stats:{}, patients:[], out:[], inc:{}, signGiverAt:null, signReceiverAt:null, created:Date.now(), updated:Date.now() };
@@ -1874,10 +1884,11 @@ function pcDD(p, i, h){
     <div class="sub">Sơ đồ cơ thể · chọn ký hiệu rồi chạm lên hình</div>
     ${bodyMap(p, i)}
     <div class="sub">Ống / đường truyền</div>
+    <p class="hint" style="margin:0 0 6px">Số ngày lưu tính theo kíp 7:00 → 7:00: đặt trước 7:00 sáng tính vào kíp hôm trước. Không rõ giờ thì để trống ô giờ.</p>
     <div class="tubes">${TUBES.map(([k,l]) => { const t = (p.tubes||{})[k] || {}; const Q = P+'tubes.'+k+'.';
-      return `<div class="tube"><b>${l}</b>${fld('Vị trí', Q+'site', t.site)}${fld('Ngày đặt', Q+'date', t.date, {type:'date', calc:calc('dwell', Q+'date')})}${fld('Tình trạng', Q+'status', t.status, {w:'tst'})}</div>`; }).join('')}
+      return `<div class="tube"><b>${l}</b>${fld('Vị trí', Q+'site', t.site)}${fld('Ngày đặt', Q+'date', t.date, {type:'date', calc:calc('dwell', Q+'date')})}${fld('Giờ đặt', Q+'time', t.time, {type:'time'})}${fld('Tình trạng', Q+'status', t.status, {w:'tst'})}</div>`; }).join('')}
       ${(D => D.map((t, j) => { const Q = P+'drains.'+j+'.';
-        return `<div class="tube dr"><b>${drainLabel(D, j)}${D.length > 1 && !LOCK ? ` <button type="button" class="btn sm ghost" data-act="rmDrain" data-i="${i}" data-j="${j}" title="Bỏ ống dẫn lưu này" aria-label="Bỏ ${drainLabel(D, j)}">✕</button>` : ''}</b>${fld('Vị trí', Q+'site', t.site, {ph:'Loại, vị trí'})}${fld('Ngày đặt', Q+'date', t.date, {type:'date', calc:calc('dwell', Q+'date')})}${fld('Dịch ra trong kíp (ml)', Q+'out', t.out, {num:1})}${fld('Tình trạng', Q+'status', t.status, {w:'tst', ph:'Màu, tính chất dịch'})}</div>`; }).join(''))(ensureDrains(p))}</div>
+        return `<div class="tube dr"><b>${drainLabel(D, j)}${D.length > 1 && !LOCK ? ` <button type="button" class="btn sm ghost" data-act="rmDrain" data-i="${i}" data-j="${j}" title="Bỏ ống dẫn lưu này" aria-label="Bỏ ${drainLabel(D, j)}">✕</button>` : ''}</b>${fld('Vị trí', Q+'site', t.site, {ph:'Loại, vị trí'})}${fld('Ngày đặt', Q+'date', t.date, {type:'date', calc:calc('dwell', Q+'date')})}${fld('Giờ đặt', Q+'time', t.time, {type:'time'})}${fld('Dịch ra trong kíp (ml)', Q+'out', t.out, {num:1})}${fld('Tình trạng', Q+'status', t.status, {w:'tst', ph:'Màu, tính chất dịch'})}</div>`; }).join(''))(ensureDrains(p))}</div>
     ${LOCK ? '' : `<button type="button" class="btn sm" data-act="addDrain" data-i="${i}" style="margin-top:8px">+ Thêm ống dẫn lưu</button>`}
     <div class="sub">Thuốc vận mạch · chọn được nhiều thuốc</div>
     ${vpBlock(p, P)}
@@ -1966,7 +1977,7 @@ function bodyMap(p, i){
     + (m.type === 'line' ? `<div class="mi2">
       <label class="f"><span>Loại</span><select data-k="${Q}kind" ${dis()}><option value="">Chọn…</option>${LINE_KIND.map(x => `<option ${m.kind===x?'selected':''}>${x}</option>`).join('')}</select></label>
       <label class="f"><span>VIP score</span><select data-k="${Q}vip" ${dis()}><option value="">–</option>${VIP.map(([v,l]) => `<option value="${v}" ${String(m.vip)===v?'selected':''}>${l}</option>`).join('')}</select></label>
-      ${fld('Ngày đặt', Q+'date', m.date, {type:'date', w:'dt', calc:calc('dwell', Q+'date')})}
+      ${fld('Ngày đặt', Q+'date', m.date, {type:'date', w:'dt', calc:calc('dwell', Q+'date')})}${fld('Giờ đặt', Q+'time', m.time, {type:'time'})}
       ${vn ? `<div class="vipw${parseInt(m.vip,10) >= 2 ? ' bad' : ''}">⚠ ${vn}</div>` : ''}</div>` : ''); }).join('');
   return `<div class="bm">
     <div>
@@ -2033,7 +2044,7 @@ function updateDerived(){
   document.querySelectorAll('[data-calc]').forEach(el => {
     const v = getP(h, el.dataset.path), t = el.dataset.calc; el.className = 'calc'; let txt = '';
     if(t === 'day' || t === 'abx'){ const n = dayN(v, h.date); if(n) txt = '→ ngày thứ ' + n; }
-    else if(t === 'dwell'){ const n = dayN(v, h.date); if(n) txt = ' · ' + n + ' ngày'; }
+    else if(t === 'dwell'){ const n = dwellDays(v, getP(h, el.dataset.path.replace(/\.date$/, '.time')), h.date); if(n) txt = ' · ' + n + ' ngày'; }
     else if(t === 'braden' && v !== '' && v != null){ const n = +v; if(n <= 9){ txt = '· rất cao'; el.classList.add('warn'); } else if(n <= 12){ txt = '· cao'; el.classList.add('warn'); } else if(n <= 14){ txt = '· trung bình'; el.classList.add('mid'); } else if(n <= 18){ txt = '· thấp'; el.classList.add('mid'); } else txt = '· không nguy cơ'; }
     else if(t === 'morse' && v !== '' && v != null){ const n = +v; if(n >= 45){ txt = '· nguy cơ cao'; el.classList.add('warn'); } else if(n >= 25){ txt = '· trung bình'; el.classList.add('mid'); } else txt = '· thấp'; }
     el.textContent = txt;
@@ -2368,8 +2379,8 @@ function ppDD(p, h){
   let o = `<div class="pp lv-${p.level||'none'}">${ppHead(p, h)}<div class="pl1">Chẩn đoán: ${pv(p.dx)}${p.prevR ? `<br><span class="k">Kíp trước dặn:</span> ${esc(p.prevR)}` : ''}</div>`;
   o += `<div class="pr"><div class="lt S">S</div><div class="tx"><span class="k">DHST bất thường / cảnh báo sớm:</span> ${pv(s.vitals)}<br><span class="k">Biến cố và xử trí:</span> ${pv(s.event)}</div></div>`;
   o += `<div class="pr"><div class="lt B">B</div><div class="tx">GCS ${pv(b.gcs)} · RASS ${pv(b.rass)} · VAS/CPOT ${pv(b.pain)} · CAM-ICU ${b.cam==='pos'?'(+)':b.cam==='neg'?'(−)':'……'}<br>Braden ${pv(b.braden)} · Morse ${pv(b.morse)} · ${box(b.restraint,'Cố định BN')} · ${box(b.iso,'Cách ly')}${b.isoText?': '+esc(b.isoText):''}</div></div>`;
-  const tRow = (l, t) => { t = t || {}; const d = dayN(t.date, h.date), st = [filled(t.out) ? 'ra ' + esc(t.out) + ' ml' : '', esc(t.status || '')].filter(Boolean).join(' · ');
-    return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? fmtD(t.date) + (d ? ' ('+d+'n)' : '') : ''}</td><td>${st}</td></tr>`; };
+  const tRow = (l, t) => { t = t || {}; const d = dwellDays(t.date, t.time, h.date), st = [filled(t.out) ? 'ra ' + esc(t.out) + ' ml' : '', esc(t.status || '')].filter(Boolean).join(' · ');
+    return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? esc(whenText(t.date, t.time)) + (d ? ' ('+d+'n)' : '') : ''}</td><td>${st}</td></tr>`; };
   const D = ensureDrains(p), Df = D.filter((t, j) => j === 0 || [t.site, t.date, t.status, t.out].some(filled)), dS = drainSum(p);
   const tubes = TUBES.map(([k,l]) => tRow(l, (p.tubes||{})[k])).join('') + Df.map((t, j) => tRow(drainLabel(Df, j), t)).join('');
   const marks = (p.marks||[]).map((mk,j) => { const lt = mk.type === 'line' ? lineText(mk, h) : ''; return `${MK[mk.type][0]}${j+1}${mk.grade?' độ '+esc(mk.grade):''}${mk.note?': '+esc(mk.note):''}${lt ? ' (' + esc(lt) + ')' : ''}`; }).join(' · ');
