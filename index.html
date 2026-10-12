@@ -235,6 +235,13 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
 .mod{position:fixed;inset:0;background:rgba(10,20,25,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
 .mod .box{background:var(--card);width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:16px;max-height:90vh;display:flex;flex-direction:column;gap:10px}
 @media (min-width:700px){.mod{align-items:center}.mod .box{border-radius:16px}}
+.asrc-o{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.asrc-o .btn{min-height:56px;font-size:15px;font-weight:600;justify-content:center;gap:8px}
+.asrc-o .btn i{font-style:normal;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--ink);font-size:12px}
+.asrc-o .btn.pri i{background:rgba(255,255,255,.25);color:var(--pri-ink)}
+.srcrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;padding:8px 10px;border-radius:10px;background:var(--pri-soft)}
+.srcrow .lab{font-size:13px;font-weight:600;color:var(--muted)}
+.srcrow textarea{flex:1;min-width:160px}
 .mod textarea{flex:1;min-height:300px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:13.5px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
@@ -721,8 +728,12 @@ function twin(h){
 }
 /* ---------- Ghép cặp phiếu BS ↔ ĐD (cùng ngày, cùng kíp): danh sách BN và thông tin chung đồng bộ hai chiều ----------
    Mỗi BN có mã liên kết p.lk dùng chung giữa bản BS và bản ĐD (và được giữ khi chép sang kíp sau). */
-const SHARED = ['bed','mrn','name','age','admit','dx','level'];
-const SHARED_LBL = 'giường, mã BA, họ tên, tuổi, ngày vào, chẩn đoán, mức độ, cân bằng dịch';
+const SHARED = ['bed','mrn','name','age','admit','dx','level','src','srcDept'];
+const SHARED_LBL = 'giường, mã BA, họ tên, tuổi, ngày vào, chẩn đoán, mức độ, nơi chuyển đến, cân bằng dịch';
+/* BN nhập mới: đến từ Cấp cứu hay khoa khác */
+const SRC = [['cc','Cấp cứu'],['kd','Khoa khác']];
+const isNewP = p => !!p && !p.from && !p.old;
+function srcText(p){ if(!p || !p.src) return ''; return p.src === 'cc' ? 'Cấp cứu' : (p.srcDept ? 'Khoa ' + p.srcDept.replace(/^khoa\s+/i, '') : 'Khoa khác'); }
 /* chỉ ghép khi hai phiếu chọn nhau (tránh một phiếu BS ghép với hai phiếu ĐD) */
 function pairOf(h){ const t = h && twin(h); return t && twin(t) === h ? t : null; }
 function mateOf(p, t){ return p && p.lk ? t.patients.find(q => q.lk === p.lk) || null : null; }
@@ -978,6 +989,31 @@ function askTransfer(who){
     w.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); done(true); } if(e.key === 'Escape') done(false); });
   });
 }
+/* thêm BN mới: hỏi nhập từ đâu. Trả về {src:'cc'} | {src:'kd', srcDept} | {} (BN đang nằm sẵn) | null (Hủy) */
+function askSource(allowOld){
+  return new Promise(res => {
+    const w = document.createElement('div'); w.className = 'mod';
+    w.innerHTML = `<div class="box asrc" style="max-width:420px"><b style="font-size:16px">Người bệnh nhập mới từ:</b>
+      <div class="asrc-o"><button class="btn" data-c="cc"><i>1</i>Cấp cứu</button><button class="btn" data-c="kd"><i>2</i>Khoa khác</button></div>
+      <label class="f" data-kd hidden><span>Tên khoa</span><input data-tr="dept" autocomplete="off" placeholder="VD: Nội tim mạch, Ngoại thần kinh…"></label>
+      <div class="row" style="justify-content:flex-end">${allowOld ? '<button class="btn sm" data-c="old" style="margin-right:auto" title="Phiếu lập lần đầu: BN đã nằm ở khoa từ trước, không tính là nhập mới">BN đang nằm sẵn</button>' : ''}<button class="btn pri" data-c="ok" hidden>Xong</button><button class="btn" data-c="x">Hủy</button></div></div>`;
+    document.body.appendChild(w);
+    const kd = w.querySelector('[data-kd]'), ok = w.querySelector('[data-c="ok"]'), di = w.querySelector('[data-tr="dept"]');
+    const fin = v => { w.remove(); res(v); };
+    const pickKD = () => { kd.hidden = false; ok.hidden = false; w.querySelector('[data-c="kd"]').classList.add('pri'); w.querySelector('[data-c="cc"]').classList.remove('pri'); setTimeout(() => di.focus(), 30); };
+    w.addEventListener('click', e => { const c = e.target.closest('[data-c]');
+      if(!c){ if(e.target === w) fin(null); return; }
+      const v = c.dataset.c;
+      if(v === 'cc') fin({ src:'cc' }); else if(v === 'kd') pickKD(); else if(v === 'ok') fin({ src:'kd', srcDept:di.value.trim() });
+      else if(v === 'old') fin({}); else fin(null); });
+    w.addEventListener('keydown', e => {
+      if(e.key === 'Escape') return fin(null);
+      if(e.key === 'Enter' && !kd.hidden){ e.preventDefault(); fin({ src:'kd', srcDept:di.value.trim() }); return; }
+      if(e.target === di) return;
+      if(e.key === '1') fin({ src:'cc' }); else if(e.key === '2') pickKD(); });
+    setTimeout(() => w.querySelector('[data-c="cc"]').focus(), 30);
+  });
+}
 function choose(msg, opts){
   return new Promise(res => {
     const w = document.createElement('div'); w.className = 'mod';
@@ -1136,7 +1172,7 @@ function recOf(date, create){
 const sec = (date, dept) => (DB.daily[date] && DB.daily[date][dept]) || {};
 const rowFilled = o => !!o && Object.values(o).some(filled);
 /* ---- HSTC: tự đếm từ phiếu bác sĩ cùng kíp (BN rời khoa trong kíp) ---- */
-const HS_AUTO = { ck:'ck', cv:'cv', rv:'dc', tv:'dth' };   /* ô số liệu HSTC → lý do rời khoa trong phiếu BS */
+const HS_AUTO = { mcc:'+cc', mkd:'+kd', ck:'ck', cv:'cv', rv:'dc', tv:'dth' };   /* ô số liệu HSTC → BN nhập mới (+nguồn) / lý do rời khoa trong phiếu BS */
 const AUTO_FROM = '2026-10-11';   /* chỉ tự đếm từ kíp này trở đi, không làm đổi số liệu các ngày cũ đã chốt */
 function bsOfDay(date){
   if(date < AUTO_FROM) return null;
@@ -1145,7 +1181,12 @@ function bsOfDay(date){
   return DB.handovers.filter(h => h.part === 'bs' && h.date === date).sort((a, b) => (SHP[b.shift]||0) - (SHP[a.shift]||0) || (b.updated||0) - (a.updated||0))[0] || null;
 }
 /* số tự đếm (null = không có phiếu BS để đếm) */
-function autoV(date, dept, k){ if(dept !== 'hs' || !HS_AUTO[k]) return null; const h = bsOfDay(date); return h ? (h.out || []).filter(o => o.reason === HS_AUTO[k]).length : null; }
+function autoV(date, dept, k){
+  if(dept !== 'hs' || !HS_AUTO[k]) return null; const h = bsOfDay(date); if(!h) return null; const a = HS_AUTO[k];
+  /* BN nhập mới: tính cả BN mới vào rồi rời khoa ngay trong kíp */
+  if(a[0] === '+') return [...h.patients, ...(h.out || []).map(o => o.p)].filter(p => isNewP(p) && p.src === a.slice(1)).length;
+  return (h.out || []).filter(o => o.reason === a).length;
+}
 /* giá trị dùng để tính: số gõ tay nếu có, không thì số tự đếm */
 function V(date, dept, k){ const x = sec(date, dept)[k]; if(filled(x)) return ni(x); const a = autoV(date, dept, k); return a == null ? 0 : a; }
 /* ca chuyển viện lấy từ phiếu BS: [{name, age, dx, dest, why, auto:{hid, j, locked}}] */
@@ -1423,8 +1464,8 @@ function updateStats(){
     const notes = [];
     if(con < 0) notes.push(['bad', 'Hiện còn bị âm: kiểm tra lại Bệnh cũ và số bệnh ra.']);
     if(dept === 'cc' && ni(x.tvng) > ni(x.moi)) notes.push(['warn', `Tử vong ngoại viện (${ni(x.tvng)}) nhiều hơn Bệnh mới (${ni(x.moi)}): BN tử vong ngoại viện cũng phải được tính vào Bệnh mới.`]);
-    if(dept === 'hs' && r && ni(sec(SD, 'hs').mcc) > ni(sec(SD, 'cc').ck)) notes.push(['warn', `HSTC nhận từ Cấp cứu ${ni(sec(SD, 'hs').mcc)} BN nhưng Cấp cứu ghi chuyển khoa ${ni(sec(SD, 'cc').ck)} BN.`]);
-    else if(dept === 'hs' && r && ni(sec(SD, 'cc').ck)) notes.push(['', `Cấp cứu chuyển khoa ${ni(sec(SD, 'cc').ck)} BN: ${ni(sec(SD, 'hs').mcc)} vào HSTC, ${ni(sec(SD, 'cc').ck) - ni(sec(SD, 'hs').mcc)} sang khoa khác.`]);
+    if(dept === 'hs' && r && V(SD, 'hs', 'mcc') > ni(sec(SD, 'cc').ck)) notes.push(['warn', `HSTC nhận từ Cấp cứu ${V(SD, 'hs', 'mcc')} BN nhưng Cấp cứu ghi chuyển khoa ${ni(sec(SD, 'cc').ck)} BN.`]);
+    else if(dept === 'hs' && r && ni(sec(SD, 'cc').ck)) notes.push(['', `Cấp cứu chuyển khoa ${ni(sec(SD, 'cc').ck)} BN: ${V(SD, 'hs', 'mcc')} vào HSTC, ${ni(sec(SD, 'cc').ck) - V(SD, 'hs', 'mcc')} sang khoa khác.`]);
     $('#snote-' + dept).innerHTML = notes.map(([c, t]) => `<div class="snote ${c}">${esc(t)}</div>`).join('');
     setChip(`chip-${dept}-cvl`, cvRows(SD, dept).length, V(SD, dept, 'cv'), 'khớp số chuyển viện');
   });
@@ -1778,7 +1819,7 @@ function equipHTML(h, num){
 /* ---------- patient header ---------- */
 function headInner(p, h){
   const d = dayN(p.admit, h.date);
-  const sub = [p.mrn ? 'BA ' + p.mrn : '', p.age ? p.age + ' tuổi' : '', d ? 'ngày HSTC thứ ' + d : '', p.dx].filter(Boolean).join(' · ');
+  const sub = [p.mrn ? 'BA ' + p.mrn : '', p.age ? p.age + ' tuổi' : '', d ? 'ngày HSTC thứ ' + d : '', isNewP(p) && p.src ? 'mới từ ' + srcText(p) : '', p.dx].filter(Boolean).join(' · ');
   const lv = p.level ? `<span class="pill ${p.level}${p.level === 'red' ? ' hot' : ''}">${p.level === 'red' ? '▲ ' : ''}${LVS[p.level]}</span>` : '';
   const icon = p.level === 'red' ? '<span class="lvi" aria-hidden="true">⚠</span>' : '';
   return `<div class="bed">${esc(p.bed) || '?'}</div><div class="who"><b>${icon}${esc(p.name) || '<span style="color:var(--muted);font-weight:500">Bệnh nhân mới</span>'}</b><small>${esc(sub) || '&nbsp;'}</small></div>${lv}${chev}`;
@@ -1792,6 +1833,11 @@ function pcWrap(p, i, h, body){
   </div>`;
 }
 function sbar(L, word, body){ return `<div class="sbar"><div class="L ${L}">${L === 'C' ? '✓' : L}<small>${word}</small></div><div class="body">${body}</div></div>`; }
+/* hàng "Nhập mới từ" trên thẻ BN mới (không hiện với BN chép từ kíp trước) */
+function srcRow(p, P){
+  if(!isNewP(p) || !('src' in p)) return '';
+  return `<div class="srcrow"><span class="lab">Nhập mới từ</span>${seg(P+'src', p.src, SRC)}${p.src === 'kd' ? inp(P+'srcDept', p.srcDept, { ph:'Tên khoa' }) : ''}</div>`;
+}
 function prevBox(p){
   if(!p.from && !p.prevR) return '';
   return `<div class="prev">${p.from ? `<div class="src">↺ Thông tin chép từ phiếu ${esc(fmtD(p.from.date))}. Kiểm tra lại và sửa những gì đã thay đổi.</div>` : ''}${p.prevR ? `<b>Kíp trước dặn:</b> ${esc(p.prevR)}` : ''}</div>`;
@@ -1801,7 +1847,7 @@ function prevBox(p){
 function pcBS(p, i, h){
   const P = `patients.${i}.`, a = p.a || {}, b = p.b || {}, r = p.r || {todo:{}}, s = p.s || {}, f = p.focus || {}, v = p.vs || {};
   const lvl = p.level === 'red' || p.level === 'amber';
-  let body = prevBox(p) + `
+  let body = prevBox(p) + srcRow(p, P) + `
   <div class="grid g4" style="margin-top:12px">
     ${fld('Giường', P+'bed', p.bed)}
     ${fld('Mã bệnh án', P+'mrn', p.mrn)}
@@ -1863,7 +1909,7 @@ function pcBS(p, i, h){
 function pcDD(p, i, h){
   const P = `patients.${i}.`, s = p.s||{}, b = p.b||{}, f = p.focus||{}, m = p.meds||{}, nu = p.nutr||{}, xn = p.bundle||{}, bc = p.bedc||{}, r = p.r||{};
   const lvl = p.level === 'red' || p.level === 'amber';
-  let body = prevBox(p) + `
+  let body = prevBox(p) + srcRow(p, P) + `
   <div class="grid g4" style="margin-top:12px">
     ${fld('Giường', P+'bed', p.bed)}
     ${fld('Mã bệnh án', P+'mrn', p.mrn)}
@@ -2079,7 +2125,7 @@ document.addEventListener('input', e => {
   const sm2 = k.match(/^(patients\.\d+\.meds)\.sedL\.\d+\.(name|rate)$/);
   if(sm2 && el.value.trim()){ const ok = sm2[1] + '.sed.on'; if(!getP(cur, ok)){ setP(cur, ok, true); const cb = document.querySelector(`[data-k="${ok}"]`); if(cb) cb.checked = true; } }
   if(/^patients\.\d+\.meds\.(vp\.)?\w+\.(rate|mg|name)$/.test(k) && el.value.trim()){ const ok = k.replace(/\.rate$/, '.on'); if(!getP(cur, ok)){ setP(cur, ok, true); const cb = document.querySelector(`[data-k="${ok}"]`); if(cb) cb.checked = true; } }
-  const sm = k.match(/^patients\.(\d+)\.(bed|mrn|name|age|admit|dx|fluid\.(?:in|out|bal))$/); if(sm) pushShared(cur, +sm[1], sm[2], el.value);
+  const sm = k.match(/^patients\.(\d+)\.(bed|mrn|name|age|admit|dx|srcDept|fluid\.(?:in|out|bal))$/); if(sm) pushShared(cur, +sm[1], sm[2], el.value);
   const om = k.match(/^out\.(\d+)\.(dest|why)$/);
   if(om){ const o = cur.out[+om[1]], t = pairOf(cur), q = o && outMate(o, t); if(q && !isLocked(t)){ q[om[2]] = el.value; t.updated = Date.now(); } }
   const em = k.match(/^equip\.(\w+)Bad$/); if(em){ const r = el.closest('.eqr'); if(r) r.classList.toggle('bad', filled(el.value)); }
@@ -2105,7 +2151,7 @@ document.addEventListener('click', e => {
   }
   const sb = e.target.closest('[data-seg]');
   if(sb && cur){ const k = sb.dataset.seg, v = sb.dataset.v, nv = getP(cur, k) === v ? '' : v; setP(cur, k, nv);
-    const lm = k.match(/^patients\.(\d+)\.level$/); if(lm) pushShared(cur, +lm[1], 'level', nv);
+    const lm = k.match(/^patients\.(\d+)\.(level|src)$/); if(lm) pushShared(cur, +lm[1], lm[2], nv);
     touched(); rerender(); return; }
   const b = e.target.closest('[data-act]'); if(!b) return;
   const act = b.dataset.act;
@@ -2176,7 +2222,8 @@ document.addEventListener('click', e => {
       DB.handovers = DB.handovers.filter(x => x !== h); persistNow(); goHome(); toast('Đã xóa phiếu');
     },
     toggle(){ const p = cur.patients[+b.dataset.i]; p.open = !p.open; touched(); if(p.open){ rerender(); } else { rerender(); document.getElementById('pc-'+p.id)?.scrollIntoView({block:'nearest'}); } },
-    addP(){ cur.patients.forEach(p => p.open = false); const p = newPatient(cur.part); cur.patients.push(p); linkRoster(cur); touched(); rerender(); setTimeout(()=>{ const el = document.getElementById('pc-'+p.id); el?.scrollIntoView({behavior:'smooth', block:'start'}); const ae = document.activeElement; if(!ae || ae === document.body || ae.dataset.act === 'addP') el?.querySelector('input')?.focus({preventScroll:true}); }, 50); },
+    async addP(){ const h0 = cur, r = await askSource(!h0.carried); if(!r || cur !== h0 || LOCK) return;
+      cur.patients.forEach(p => p.open = false); const p = Object.assign(newPatient(cur.part), r); cur.patients.push(p); linkRoster(cur); touched(); rerender(); setTimeout(()=>{ const el = document.getElementById('pc-'+p.id); el?.scrollIntoView({behavior:'smooth', block:'start'}); const ae = document.activeElement; if(!ae || ae === document.body || ae.dataset.act === 'addP') el?.querySelector('input')?.focus({preventScroll:true}); }, 50); },
     async rmP(){
       const i = +b.dataset.i, p = cur.patients[i];
       const who = `${p.bed ? 'Giường ' + p.bed : 'Bệnh nhân'}${p.name ? ' – ' + p.name : ''}${p.mrn ? ' (BA ' + p.mrn + ')' : ''}`;
@@ -2351,7 +2398,7 @@ function printHTML(h){
 }
 function ppHead(p, h, extra){
   const d = dayN(p.admit, h.date);
-  return `<div class="pph"><b>Giường ${pv(p.bed)}</b> · Mã BA ${pv(p.mrn)} · ${pv(p.name)} · Tuổi ${pv(p.age)}${extra||''} · Ngày HSTC thứ ${d || '……'} ${p.level ? ` · <span class="lvb ${p.level}">● ${LVS[p.level]}</span>` : ''}</div>`;
+  return `<div class="pph"><b>Giường ${pv(p.bed)}</b> · Mã BA ${pv(p.mrn)} · ${pv(p.name)} · Tuổi ${pv(p.age)}${extra||''} · Ngày HSTC thứ ${d || '……'}${isNewP(p) && p.src ? ` · <i>Mới từ ${esc(srcText(p))}</i>` : ''} ${p.level ? ` · <span class="lvb ${p.level}">● ${LVS[p.level]}</span>` : ''}</div>`;
 }
 function ppBS(p, h){
   const a = p.a||{}, b = p.b||{}, s = p.s||{}, r = p.r||{};
