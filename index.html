@@ -179,8 +179,13 @@ input[data-k$=".fluid.bal"]::placeholder{color:var(--pri);opacity:.8;font-weight
 .mk-n{font-size:8px;font-weight:700;fill:var(--ink)}
 .mlist{flex:1;min-width:220px;display:grid;gap:6px}
 .mi{display:grid;grid-template-columns:auto 1fr auto auto;gap:6px;align-items:center}
+.sedb{gap:6px}.sedr{display:grid;grid-template-columns:1fr 80px auto 34px;gap:6px;align-items:center}.sedr .u{font-size:12px;color:var(--muted)}
 .mi .sym{font-weight:700;width:34px;text-align:center}
 .mi select{width:auto;min-height:34px;padding:4px 6px}
+.mi2{display:grid;grid-template-columns:1fr 1.15fr 1.25fr;gap:6px;margin:-2px 0 4px 40px;padding:6px 8px;border-radius:8px;background:var(--card2)}
+.mi2 .f>span{font-size:11.5px}.mi2 select{width:100%;min-height:34px}
+.mi2 .vipw{grid-column:1/-1;font-size:12px;color:var(--amb);font-weight:600}.mi2 .vipw.bad{color:var(--red)}
+@media (max-width:560px){.mi2{grid-template-columns:1fr 1fr;margin-left:0}.mi2 .f.dt{grid-column:1/-1}}
 .sym.line{color:var(--blue)}.sym.drain{color:var(--org)}.sym.ulcer{color:var(--red)}
 .tool button{font-weight:600}
 .risk{font-size:11.5px;font-weight:700}
@@ -566,7 +571,7 @@ function migrate(h){
       if(a.labs && !a.pending) a.pending = a.labs; });
     return;
   }
-  (h.patients || []).forEach(p => { ensureDrains(p); const m = p.meds || (p.meds = {}); if(m.vaso && !m.vp){ m.vp = { other:{ on:!!m.vaso.on, name:'Vận mạch', rate:m.vaso.rate||'' } }; delete m.vaso; } });
+  (h.patients || []).forEach(p => { ensureDrains(p); ensureSed(p); const m = p.meds || (p.meds = {}); if(m.vaso && !m.vp){ m.vp = { other:{ on:!!m.vaso.on, name:'Vận mạch', rate:m.vaso.rate||'' } }; delete m.vaso; } });
   const e = h.equip;
   if(e){
     if(typeof e.pump === 'string'){ if(e.pump && !e.pumpBad) e.pumpBad = e.pump; e.pump = false; }
@@ -798,7 +803,7 @@ const OUT = [['ck','Chuyển khoa'],['cv','Chuyển viện'],['dc','Ra viện'],
 const OUT_OLD = { tr:'Chuyển khoa/viện' };   /* phiếu cũ: chưa tách chuyển khoa / chuyển viện */
 const RESP = [['tm','Thở máy'],['hfnc','HFNC'],['oxy','Oxy'],['kt','Khí trời']];
 const TODO = [['lab','XN / CĐHA chưa làm'],['consult','Hội chẩn chưa làm'],['transfer','Dự kiến chuyển khoa / cai máy'],['family','Cần trao đổi người nhà'],['orders','Thuốc / y lệnh cần chỉnh'],['open','Vấn đề chưa giải quyết']];
-const TUBES = [['cvc','CVC / đường truyền'],['ett','NKQ / MKQ (cuff, mốc)'],['ngt','Sonde dạ dày'],['foley','Sonde tiểu']];
+const TUBES = [['cvc','CVC / đường truyền'],['ett','NKQ / MKQ (cuff, mốc)'],['ngt','Sonde nuôi ăn'],['foley','Sonde tiểu']];
 /* dẫn lưu: danh sách nhiều ống (p.drains). Bản cũ chỉ có một ô tubes.drain → chuyển thành ống đầu tiên, mã cố định 'd0' để các máy chuyển giống nhau */
 function ensureDrains(p){
   if(!Array.isArray(p.drains) || !p.drains.length){
@@ -831,6 +836,11 @@ function vpLine(p){
     return vpName(k, d) + (d.mg ? ` ${d.mg} ${k==='avp'?'UI':'mg'}/bơm` : '') + (d.rate ? ` · ${d.rate} ml/h` : ''); });
 }
 const MK = { line:['●','Đường truyền/catheter'], drain:['▲','Dẫn lưu/sonde'], ulcer:['■','Loét/tổn thương da'] };
+const LINE_KIND = ['Ngoại vi', 'CVC', 'PICC', 'Động mạch', 'Catheter lọc máu', 'Khác'];
+/* VIP score (Visual Infusion Phlebitis): 0 bình thường · 1 theo dõi · ≥2 rút, đặt lại vị trí khác */
+const VIP = [['0','0 · Bình thường'],['1','1 · Nghi viêm'],['2','2 · Viêm sớm'],['3','3 · Viêm vừa'],['4','4 · Viêm tiến triển'],['5','5 · Viêm tắc mạch']];
+function vipNote(v){ const n = parseInt(v, 10); return !isFinite(n) || n < 1 ? '' : n === 1 ? 'VIP 1: theo dõi sát vị trí đặt' : 'VIP ≥ 2: rút kim, đặt lại ở vị trí khác'; }
+function lineText(mk, h){ const d = dayN(mk.date, h.date); return [mk.kind, filled(mk.vip) ? 'VIP ' + mk.vip : '', mk.date ? 'đặt ' + fmtDM(mk.date) + (d ? ' (' + d + 'n)' : '') : ''].filter(Boolean).join(' · '); }
 
 function newHandover(part){
   const h = { id:uid(), part, date:reportDay(), shift:'', giver:'', receiver:'', head:'', stats:{}, patients:[], out:[], inc:{}, signGiverAt:null, signReceiverAt:null, created:Date.now(), updated:Date.now() };
@@ -840,7 +850,7 @@ function newHandover(part){
 function newPatient(part){
   const base = { id:uid(), lk:uid(), bed:'', mrn:'', name:'', age:'', admit:'', dx:'', level:'', focus:{}, s:{}, b:{}, fluid:{}, open:true, prevR:'' };
   if(part === 'bs') return Object.assign(base, { weight:'', allergy:'', allergyText:'', course:'', labsum:'', unchanged:false, a:{}, r:{ monitor:'', todo:{} } });
-  return Object.assign(base, { marks:[], tubes:{}, drains:[{ id:'d0' }], meds:{}, nutr:{}, bundle:{}, bedc:{}, r:{} });
+  return Object.assign(base, { marks:[], tubes:{}, drains:[{ id:'d0' }], meds:{ sedL:[{ id:'s0', name:'', rate:'' }] }, nutr:{}, bundle:{}, bedc:{}, r:{} });
 }
 function partName(p){ return p === 'bs' ? 'Bác sĩ' : 'Điều dưỡng'; }
 function roleAbbr(p){ return p === 'bs' ? 'BS' : 'ĐD'; }
@@ -882,6 +892,7 @@ function carryPatient(p, part, src){
   q.id = uid(); q.prevR = rText(p, part); q.s = {}; q.open = false;
   q.fluid = {}; q.vs = {};   /* cân bằng dịch và DHST tính riêng cho từng kíp */
   if(Array.isArray(q.drains)) q.drains.forEach(d => { delete d.out; });
+  if(Array.isArray(q.marks)) q.marks.forEach(mk => { delete mk.vip; });   /* VIP score đánh giá lại mỗi kíp */
   q.from = { date:src.date, shift:src.shift, part:src.part };
   if(part === 'bs'){ q.unchanged = false; q.r = { monitor:'', todo:{} }; }
   else { q.bedc = {}; q.r = {}; }
@@ -1681,7 +1692,7 @@ function editHTML(h){
     </section>
     <section class="sec">
       <h2>${N()} Bệnh nhân cần chú ý đặc biệt</h2>
-      <p class="hint">Tự tổng hợp từ những ca được đánh dấu <span class="dot red"></span>nặng lên hoặc <span class="dot amber"></span>theo dõi sát. ${isBS ? 'Lấy sẵn chẩn đoán, DHST và mục R trong phiếu từng bệnh nhân, không cần ghi thêm.' : 'Nội dung sửa trong phiếu từng bệnh nhân.'}</p>
+      <p class="hint">Tự tổng hợp từ những ca được đánh dấu <span class="dot red"></span>nặng lên hoặc <span class="dot amber"></span>theo dõi sát. ${isBS ? 'Lấy sẵn chẩn đoán, DHST và mục R trong phiếu từng bệnh nhân, không cần ghi thêm.' : 'Lấy sẵn chẩn đoán, DHST bất thường và mục R trong phiếu từng bệnh nhân, không cần ghi thêm.'}</p>
       <div id="attn"></div>
     </section>
     <section class="sec">
@@ -1849,11 +1860,7 @@ function pcDD(p, i, h){
     ${fld('Chẩn đoán', P+'dx', p.dx, {w:'wf'})}
   </div>
   <div class="row" style="margin-top:10px"><span class="lab">Mức độ</span>${seg(P+'level', p.level, [['red','Nặng lên','lv-red'],['amber','Theo dõi sát','lv-amber'],['green','Ổn định','lv-green']])}</div>
-  ${lvl ? `<div class="focus"><div class="ttl">Ghi vào bảng “Bệnh nhân cần chú ý đặc biệt”</div><div class="grid">
-    ${fld('Vấn đề cần lưu ý', P+'focus.problem', f.problem, {w:'wf'})}
-    ${fld('Cách theo dõi / chăm sóc', P+'focus.care', f.care)}
-    ${fld('Báo BS khi', P+'focus.call', f.call)}
-  </div></div>` : ''}`;
+`;
   body += sbar('S', 'TÌNH HUỐNG', `<div class="grid">
     ${fld('DHST bất thường / điểm cảnh báo sớm', P+'s.vitals', s.vitals, {w:'wf'})}
     ${fld('Biến cố trong kíp và cách xử trí', P+'s.event', s.event, {area:1, w:'wf'})}</div>`);
@@ -1876,7 +1883,7 @@ function pcDD(p, i, h){
     ${vpBlock(p, P)}
     <div class="sub">Thuốc nguy cơ cao khác</div>
     <div class="grid">
-      ${medF('Insulin', P+'meds.insulin', m.insulin)}${medF('An thần', P+'meds.sed', m.sed)}
+      ${medF('Insulin', P+'meds.insulin', m.insulin)}${sedBlock(p, P, i)}
       ${fld('Phản ứng bất thường đối với thuốc nguy cơ cao khác', P+'meds.reaction', m.reaction, {w:'wf'})}
     </div>
     <div class="sub">Dinh dưỡng</div>
@@ -1906,6 +1913,19 @@ function vpBlock(p, P){
     </div>`; }).join('')}</div>
 `;
 }
+/* an thần: danh sách 1–3 thuốc (tên + tốc độ). Bản cũ chỉ có một ô tốc độ → chuyển thành thuốc đầu tiên, mã cố định 's0' */
+function ensureSed(p){
+  const m = p.meds || (p.meds = {});
+  if(!Array.isArray(m.sedL) || !m.sedL.length){ const old = m.sed || {}; m.sedL = [{ id:'s0', name:'', rate:old.rate || '' }]; if(m.sed) delete m.sed.rate; }
+  return m.sedL;
+}
+function sedBlock(p, P, i){
+  const L = ensureSed(p), on = p.meds.sed && p.meds.sed.on;
+  return `<div class="f w2 sedb"><span>${chk('An thần', P+'meds.sed.on', on)}</span>
+    ${L.map((x, j) => `<div class="sedr">${inp(P+'meds.sedL.'+j+'.name', x.name, {ph:'Tên thuốc (vd: Midazolam)'})}${inp(P+'meds.sedL.'+j+'.rate', x.rate, {num:1, ph:'0'})}<span class="u">ml/h</span>${L.length > 1 && !LOCK ? `<button type="button" class="btn sm ghost" data-act="rmSed" data-i="${i}" data-j="${j}" title="Bỏ thuốc này" aria-label="Bỏ thuốc an thần ${j + 1}">✕</button>` : '<span></span>'}</div>`).join('')}
+    ${L.length < 3 && !LOCK ? `<button type="button" class="btn sm" data-act="addSed" data-i="${i}" style="align-self:flex-start">+ Thêm thuốc an thần</button>` : ''}</div>`;
+}
+const sedText = m => (m.sedL || []).filter(x => filled(x.name) || filled(x.rate)).map(x => (x.name || 'an thần') + (filled(x.rate) ? ' ' + x.rate + ' ml/h' : '')).join('; ');
 function medF(label, path, v){ v = v || {}; return `<div class="f"><span>${chk(label, path+'.on', v.on)}</span>${inp(path+'.rate', v.rate, {num:1, ph:'ml/h'})}</div>`; }
 
 /* ---------- body map ---------- */
@@ -1938,10 +1958,16 @@ function mapSVG(p, view, i, small){
 }
 function bodyMap(p, i){
   const tool = mapTool[p.id] || 'line', P = `patients.${i}.`;
-  const list = (p.marks||[]).map((m,j) => `<div class="mi"><span class="sym ${m.type}">${MK[m.type][0]} ${j+1}</span>
-    ${inp(P+'marks.'+j+'.note', m.note, {ph: m.type==='line' ? 'Loại, vị trí…' : m.type==='drain' ? 'Loại, dịch ra…' : 'Vị trí, kích thước…'})}
-    ${m.type === 'ulcer' ? `<select data-k="${P}marks.${j}.grade" ${dis()}><option value="">Độ</option>${['1','2','3','4','KXĐ','DTI'].map(g => `<option ${m.grade===g?'selected':''}>${g}</option>`).join('')}</select>` : '<span></span>'}
-    ${LOCK ? '' : `<button class="btn sm ghost" data-act="delMark" data-i="${i}" data-j="${j}" title="Xóa">✕</button>`}</div>`).join('');
+  const list = (p.marks||[]).map((m,j) => { const Q = P+'marks.'+j+'.', vn = m.type === 'line' ? vipNote(m.vip) : '';
+    return `<div class="mi"><span class="sym ${m.type}">${MK[m.type][0]} ${j+1}</span>
+    ${inp(Q+'note', m.note, {ph: m.type==='line' ? 'Vị trí (vd: mu bàn tay T)' : m.type==='drain' ? 'Loại, dịch ra…' : 'Vị trí, kích thước…'})}
+    ${m.type === 'ulcer' ? `<select data-k="${Q}grade" ${dis()}><option value="">Độ</option>${['1','2','3','4','KXĐ','DTI'].map(g => `<option ${m.grade===g?'selected':''}>${g}</option>`).join('')}</select>` : '<span></span>'}
+    ${LOCK ? '' : `<button class="btn sm ghost" data-act="delMark" data-i="${i}" data-j="${j}" title="Xóa">✕</button>`}</div>`
+    + (m.type === 'line' ? `<div class="mi2">
+      <label class="f"><span>Loại</span><select data-k="${Q}kind" ${dis()}><option value="">Chọn…</option>${LINE_KIND.map(x => `<option ${m.kind===x?'selected':''}>${x}</option>`).join('')}</select></label>
+      <label class="f"><span>VIP score</span><select data-k="${Q}vip" ${dis()}><option value="">–</option>${VIP.map(([v,l]) => `<option value="${v}" ${String(m.vip)===v?'selected':''}>${l}</option>`).join('')}</select></label>
+      ${fld('Ngày đặt', Q+'date', m.date, {type:'date', w:'dt', calc:calc('dwell', Q+'date')})}
+      ${vn ? `<div class="vipw${parseInt(m.vip,10) >= 2 ? ' bad' : ''}">⚠ ${vn}</div>` : ''}</div>` : ''); }).join('');
   return `<div class="bm">
     <div>
       ${LOCK ? '' : `<div class="seg tool" style="margin-bottom:8px">${Object.entries(MK).map(([k,[sym,lab]]) => `<button type="button" data-act="tool" data-pid="${p.id}" data-v="${k}" class="${tool===k?'on':''}" title="${lab}">${sym} ${k==='line'?'Truyền':k==='drain'?'Dẫn lưu':'Loét'}</button>`).join('')}</div>`}
@@ -1958,12 +1984,11 @@ function attnHTML(h){
   const isBS = h.part === 'bs';
   const rows = h.patients.filter(p => p.level === 'red' || p.level === 'amber').sort((a,b) => (a.level===b.level ? natCmp(a.bed,b.bed) : a.level==='red' ? -1 : 1));
   if(!rows.length) return `<div class="empty" style="padding:10px">Chưa có ca nào được đánh dấu nặng lên hoặc theo dõi sát.</div>`;
-  if(isBS) return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>Chẩn đoán</th><th>DHST lúc bàn giao</th><th>Dặn kíp sau</th></tr></thead><tbody>
-    ${rows.map(p => `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Chẩn đoán">${esc(p.dx)||'—'}</td><td data-l="DHST">${esc(vsLine(p.vs))||'—'}</td><td data-l="Dặn kíp sau">${esc(rText(p, 'bs'))||'—'}</td></tr>`).join('')}
+  if(!isBS) return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>Chẩn đoán</th><th>DHST bất thường / cảnh báo sớm</th><th>Lưu ý kíp sau</th></tr></thead><tbody>
+    ${rows.map(p => `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Chẩn đoán">${esc(p.dx)||'—'}</td><td data-l="DHST">${esc((p.s||{}).vitals)||'—'}</td><td data-l="Lưu ý kíp sau">${esc(rText(p, 'dd'))||'—'}</td></tr>`).join('')}
   </tbody></table>`;
-  const c3 = isBS ? 'Theo dõi gì' : 'Cách theo dõi / chăm sóc', c4 = isBS ? 'Ngưỡng gọi BS' : 'Báo BS khi';
-  return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>${isBS?'Vấn đề chính':'Vấn đề cần lưu ý'}</th><th>${c3}</th><th>${c4}</th></tr></thead><tbody>
-    ${rows.map(p => { const f = p.focus||{}; return `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Vấn đề">${esc(f.problem)||'—'}</td><td data-l="${c3}">${esc(isBS ? f.monitor : f.care)||'—'}</td><td data-l="${c4}">${esc(f.call)||'—'}</td></tr>`; }).join('')}
+  return `<table class="at"><thead><tr><th>Giường / Họ tên</th><th>Mức độ</th><th>Chẩn đoán</th><th>DHST lúc bàn giao</th><th>Dặn kíp sau</th></tr></thead><tbody>
+    ${rows.map(p => `<tr><td><b>${esc(p.bed)||'?'}</b> · ${esc(p.name)}</td><td data-l="Mức độ"><span class="dot ${p.level}"></span>${LVS[p.level]}</td><td data-l="Chẩn đoán">${esc(p.dx)||'—'}</td><td data-l="DHST">${esc(vsLine(p.vs))||'—'}</td><td data-l="Dặn kíp sau">${esc(rText(p, 'bs'))||'—'}</td></tr>`).join('')}
   </tbody></table>`;
 }
 function checks(h){
@@ -1976,7 +2001,7 @@ function checks(h){
     if(!normT(p.mrn)) out.push(`${who}: chưa ghi mã bệnh án`);
     else if(h.patients.some((q, j) => j !== i && normT(q.mrn) === normT(p.mrn))) out.push(`${who}: mã bệnh án ${p.mrn} bị trùng với BN khác trong phiếu`);
     if(!p.level) out.push(`${who}: chưa chọn mức độ`);
-    if(h.part === 'dd' && (p.level === 'red' || p.level === 'amber') && !(p.focus && p.focus.call)) out.push(`${who}: ca ${LVS[p.level].toLowerCase()} chưa ghi “${h.part==='bs'?'Ngưỡng gọi BS':'Báo BS khi'}”`);
+    if(h.part === 'dd') (p.marks || []).forEach((mk, j) => { if(mk.type === 'line' && parseInt(mk.vip, 10) >= 2) out.push(`${who}: đường truyền ●${j + 1} VIP ${mk.vip}, cần rút và đặt lại vị trí khác`); });
     if(h.part === 'bs'){
       if(!p.allergy) out.push(`${who}: chưa ghi dị ứng`);
       if(!hasVS(p.vs)) out.push(`${who}: chưa ghi dấu hiệu sinh tồn lúc bàn giao`);
@@ -2037,6 +2062,8 @@ document.addEventListener('input', e => {
   setP(cur, k, el.value);
   if(dm) addDrainOut(cur, +dm[1], (fnum(el.value) || 0) - dOld);
   if(/\.todo\.\w+\.text$/.test(k) && el.value.trim()){ const ok = k.replace(/\.text$/, '.on'); if(!getP(cur, ok)){ setP(cur, ok, true); const cb = document.querySelector(`[data-k="${ok}"]`); if(cb) cb.checked = true; } }
+  const sm2 = k.match(/^(patients\.\d+\.meds)\.sedL\.\d+\.(name|rate)$/);
+  if(sm2 && el.value.trim()){ const ok = sm2[1] + '.sed.on'; if(!getP(cur, ok)){ setP(cur, ok, true); const cb = document.querySelector(`[data-k="${ok}"]`); if(cb) cb.checked = true; } }
   if(/^patients\.\d+\.meds\.(vp\.)?\w+\.(rate|mg|name)$/.test(k) && el.value.trim()){ const ok = k.replace(/\.rate$/, '.on'); if(!getP(cur, ok)){ setP(cur, ok, true); const cb = document.querySelector(`[data-k="${ok}"]`); if(cb) cb.checked = true; } }
   const sm = k.match(/^patients\.(\d+)\.(bed|mrn|name|age|admit|dx|fluid\.(?:in|out|bal))$/); if(sm) pushShared(cur, +sm[1], sm[2], el.value);
   const om = k.match(/^out\.(\d+)\.(dest|why)$/);
@@ -2169,6 +2196,8 @@ document.addEventListener('click', e => {
       touched(); rerender(); toast(`Đã lấy ${cur.patients.length} BN từ phiếu ${partName(other)} ${fmtD(src.date)}`); },
     tool(){ mapTool[b.dataset.pid] = b.dataset.v; rerender(); },
     delMark(){ cur.patients[+b.dataset.i].marks.splice(+b.dataset.j, 1); touched(); rerender(); },
+    addSed(){ const L = ensureSed(cur.patients[+b.dataset.i]); if(L.length < 3){ L.push({ id:uid(), name:'', rate:'' }); touched(); rerender(); } },
+    rmSed(){ const L = ensureSed(cur.patients[+b.dataset.i]); L.splice(+b.dataset.j, 1); touched(); rerender(); },
     addDrain(){ const D = ensureDrains(cur.patients[+b.dataset.i]); D.push({ id:uid() }); touched(); rerender(); toast('Đã thêm ' + drainLabel(D, D.length - 1).toLowerCase()); },
     async rmDrain(){
       const D = ensureDrains(cur.patients[+b.dataset.i]), j = +b.dataset.j, t = D[j] || {};
@@ -2233,7 +2262,7 @@ function summaryText(h, ab){
     L.push(''); L.push(t);
     ps.forEach(p => {
       const f = p.focus||{}; L.push(line(p));
-      const det = isBS ? [] : [f.problem && 'Vấn đề: ' + f.problem, (isBS ? f.monitor : f.care) && (isBS ? 'Theo dõi: ' + f.monitor : 'Chăm sóc: ' + f.care), f.call && (isBS ? 'Gọi BS khi: ' : 'Báo BS khi: ') + f.call].filter(Boolean);
+      const det = isBS ? [] : [p.s && p.s.vitals && 'DHST: ' + p.s.vitals].filter(Boolean);
       if(det.length) L.push('   ' + det.join(' | '));
       if(isBS && hasVS(p.vs)){ const v = p.vs; L.push(`   ❤ DHST: HA ${v.bp||'–'} · M ${v.hr||'–'} · SpO₂ ${v.spo2||'–'}% · T ${v.t||'–'}°C`); }
       const fl = p.fluid || {}, bl = balOf(fl);
@@ -2290,8 +2319,8 @@ function printHTML(h){
   const att = h.patients.filter(p => p.level === 'red' || p.level === 'amber').sort((a,b) => (a.level===b.level ? natCmp(a.bed,b.bed) : a.level==='red' ? -1 : 1));
   if(isBS) o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:20%">Giường / Họ tên</th><th style="width:11%">Mức độ</th><th style="width:22%">Chẩn đoán</th><th style="width:20%">DHST lúc bàn giao</th><th>Dặn kíp sau</th></tr>
     ${att.length ? att.map(p => `<tr><td><b>${esc(p.bed)}</b> · ${esc(p.name)}</td><td class="lvb ${p.level}">● ${LVS[p.level]}</td><td>${esc(p.dx)}</td><td>${esc(vsLine(p.vs))}</td><td>${esc(rText(p, 'bs'))}</td></tr>`).join('') : `<tr><td colspan="5" class="em">Không có</td></tr>`}</table></div>`;
-  else o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:22%">Giường / Họ tên</th><th style="width:12%">Mức độ</th><th>${isBS?'Vấn đề chính':'Vấn đề cần lưu ý'}</th><th>${isBS?'Theo dõi gì':'Cách theo dõi / chăm sóc'}</th><th>${isBS?'Ngưỡng gọi BS':'Báo BS khi'}</th></tr>
-    ${att.length ? att.map(p => { const f = p.focus||{}; return `<tr><td><b>${esc(p.bed)}</b> · ${esc(p.name)}</td><td class="lvb ${p.level}">● ${LVS[p.level]}</td><td>${esc(f.problem)}</td><td>${esc(isBS?f.monitor:f.care)}</td><td>${esc(f.call)}</td></tr>`; }).join('') : `<tr><td colspan="5" class="em">Không có</td></tr>`}</table></div>`;
+  else o += `<div class="pr-sec"><h3>2. Bệnh nhân cần chú ý đặc biệt</h3><table class="pt"><tr><th style="width:20%">Giường / Họ tên</th><th style="width:11%">Mức độ</th><th style="width:22%">Chẩn đoán</th><th style="width:22%">DHST bất thường / cảnh báo sớm</th><th>Lưu ý kíp sau</th></tr>
+    ${att.length ? att.map(p => `<tr><td><b>${esc(p.bed)}</b> · ${esc(p.name)}</td><td class="lvb ${p.level}">● ${LVS[p.level]}</td><td>${esc(p.dx)}</td><td>${esc((p.s||{}).vitals)}</td><td>${esc(rText(p, 'dd'))}</td></tr>`).join('') : `<tr><td colspan="5" class="em">Không có</td></tr>`}</table></div>`;
   if(isBS){
     o += `<div class="pr-sec"><h3>3. Sự cố y khoa trong kíp</h3>${h.inc.has==='yes' ? `☒ Có: ${pv(h.inc.text)} · ${box(h.inc.reported,'Đã báo cáo')}` : h.inc.has==='no' ? '☒ Không' : '☐ Không ☐ Có'}</div>`;
   } else {
@@ -2343,12 +2372,12 @@ function ppDD(p, h){
     return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? fmtD(t.date) + (d ? ' ('+d+'n)' : '') : ''}</td><td>${st}</td></tr>`; };
   const D = ensureDrains(p), Df = D.filter((t, j) => j === 0 || [t.site, t.date, t.status, t.out].some(filled)), dS = drainSum(p);
   const tubes = TUBES.map(([k,l]) => tRow(l, (p.tubes||{})[k])).join('') + Df.map((t, j) => tRow(drainLabel(Df, j), t)).join('');
-  const marks = (p.marks||[]).map((mk,j) => `${MK[mk.type][0]}${j+1}${mk.grade?' độ '+esc(mk.grade):''}${mk.note?': '+esc(mk.note):''}`).join(' · ');
+  const marks = (p.marks||[]).map((mk,j) => { const lt = mk.type === 'line' ? lineText(mk, h) : ''; return `${MK[mk.type][0]}${j+1}${mk.grade?' độ '+esc(mk.grade):''}${mk.note?': '+esc(mk.note):''}${lt ? ' (' + esc(lt) + ')' : ''}`; }).join(' · ');
   const med = (l, v) => box(v && v.on, l) + (v && v.rate ? ' ' + esc(v.rate) + ' ml/h' : '');
   o += `<div class="pr"><div class="lt A">A</div><div class="tx"><div class="mini">${mapSVG(p,'front',0,1)}${mapSVG(p,'back',0,1)}
       <div style="flex:1"><table class="pt"><tr><th>Ống / đường truyền</th><th>Vị trí</th><th>Ngày đặt</th><th>Tình trạng</th></tr>${tubes}</table>${marks ? '<div style="margin-top:2px">' + marks + '</div>' : ''}</div></div>
       <span class="k">Vận mạch:</span> ${vpLine(p).map(esc).join(' · ') || 'không'}<br>
-      <span class="k">Thuốc nguy cơ cao khác:</span> ${med('Insulin', m.insulin)} · ${med('An thần', m.sed)}<br>
+      <span class="k">Thuốc nguy cơ cao khác:</span> ${med('Insulin', m.insulin)} · ${box(m.sed && m.sed.on, 'An thần')}${sedText(m) ? ': ' + esc(sedText(m)) : ''}<br>
       <span class="k">Phản ứng bất thường đối với thuốc nguy cơ cao khác:</span> ${pv(m.reaction)}<br>
       <span class="k">Dinh dưỡng:</span> ${pv(nu.route)} · lượng TB ${pv(nu.amount)} ml · tồn dư ${pv(nu.residual)} ml<br>
       <span class="k">Cân bằng dịch:</span> nhập ${pv(fl.in)} ml · xuất ${pv(fl.out)} ml${dS ? ' (gồm ' + (Math.round(dS * 10) / 10) + ' ml dẫn lưu)' : ''} · bilan ${pv(balOf(fl))} ml<br>
