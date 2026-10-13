@@ -308,7 +308,12 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
   .lr.er .f-dx{grid-column:auto}.lr.er .del{grid-column:5}
   .lr.cvl{grid-template-columns:22px minmax(0,1.2fr) 58px minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,1.2fr) 34px}
   .lr.cvl .f-dx,.lr.cvl .f-dest,.lr.cvl .f-why{grid-column:auto}.lr.cvl .del{grid-column:7}
+  .lr.tronl{grid-template-columns:22px minmax(0,1.2fr) 58px minmax(0,1.6fr) minmax(0,1.4fr) 34px}
+  .lr.tronl .f-dx,.lr.tronl .f-why{grid-column:auto}.lr.tronl .del{grid-column:6}
+  .lr.tvl{grid-template-columns:22px minmax(0,1.6fr) 62px auto 34px}
+  .lr.tvl .f-kind{grid-column:auto}.lr.tvl .del{grid-column:5}
 }
+.lr .f-kind{grid-column:2/4;justify-self:start}.lr .f-kind button{min-height:36px;padding:4px 14px}
 .srcsel{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
 .srcsel>span{color:var(--muted);font-weight:600}
 .srcsel select{flex:1;min-width:200px;width:auto;min-height:36px}
@@ -1135,7 +1140,7 @@ function mainHTML(){
    Một bản ghi cho mỗi ngày: kíp trực ngày D = từ 7:00 ngày D đến 7:00 ngày D+1.
    DB.daily['YYYY-MM-DD'] = {
      staff:{bs,dd,hl},
-     cc:{cu,moi,ck,cv,rv,tron,tvn,tvng, er:[{name,age,dx}], cvl:[{name,age,dx,dest,why}]},
+     cc:{cu,moi,ck,cv,rv,tron,tvn,tvng, er:[{name,age,dx}], cvl:[{name,age,dx,dest,why}], tronl:[{name,age,dx,why}], tvl:[{name,age,kind:'n'|'ng'}]},
      hs:{cu,mcc,mkd,ck,cv,rv,tv, cvl:[…]},
      dt:{moi},
      hsSrc:'id phiếu BS được chọn', vs:{ 'mã BN':{hr,bp,t,rr,spo2} }, created, updated }
@@ -1151,6 +1156,10 @@ const DEPT = {
 };
 const ERF = [['name','Họ tên'],['age','Tuổi'],['dx','Chẩn đoán']];
 const CVF = [['name','Họ tên'],['age','Tuổi'],['dx','Chẩn đoán'],['dest','Nơi chuyển đến'],['why','Lý do chuyển']];
+const TRF = [['name','Họ tên'],['age','Tuổi'],['dx','Chẩn đoán'],['why','Lý do trốn']];
+const TVF = [['name','Họ tên'],['age','Tuổi'],['kind','Nội / ngoại viện']];
+const TVK = [['n','Nội viện'],['ng','Ngoại viện']];
+const kindName = k => (TVK.find(x => x[0] === k) || [,''])[1];
 const VSF = [['bp','Huyết áp','mmHg'],['hr','Mạch','lần/phút'],['spo2','SpO₂','%'],['t','Nhiệt độ','°C']];
 const hasVS = v => !!v && VSF.some(([f]) => filled(v[f]));
 function vsText(v){ v = v || {}; return `HA ${pv(v.bp)} mmHg · Mạch ${pv(v.hr)} lần/phút · SpO₂ ${pv(v.spo2)} % · Nhiệt độ ${pv(v.t)} °C`; }
@@ -1263,7 +1272,7 @@ function fluidOf(p){ const f = p.fluid || {}; return hasFluid(f) ? `nhập ${f.i
 let SD = null;                                    /* ngày kíp trực đang xem */
 const SU = { two:false, week:false, range:false, rDays:true, d1:'', d2:'', r1:'', r2:'' };    /* lựa chọn tổng kết */
 const SP = { cc:{ day:true, two:true, week:true, range:true }, hs:{ day:true, two:true, week:true, range:true }, dt:{ day:true, two:true, week:true, range:true },
-  sec:{ er:true, hsp:true, cv:true } };   /* phần được chọn để in */
+  sec:{ er:true, hsp:true, cv:true, tron:true, tv:true } };   /* phần được chọn để in */
 function setSDquiet(d){ SD = d; SU.d1 = addDays(d, -1); SU.d2 = d; }
 /* tải số liệu và phiếu bàn giao về máy cho tới ngày from (phiếu BS cần để tự đếm số HSTC) */
 function loadBoth(from){ return Promise.all([ensureLoaded('d', from), ensureLoaded('h', from)]).then(([a, b]) => a > 0 || b > 0); }
@@ -1290,7 +1299,9 @@ function listBox(dept, lk, fields, title, pk){
   if(AU.length) rows += `<p class="hint" style="margin:4px 0 2px">Dòng nền xanh tự lấy từ phiếu bác sĩ kíp ${fmtDM(SD)}${AU.some(o => o.auto.locked) ? ' (phiếu đã ký khóa, không sửa được)' : ''}. Muốn bỏ hoặc đổi lý do, sửa trong phiếu bác sĩ.</p>`;
   for(let i = 0; i < n; i++){
     const o = L[i] || {};
-    rows += `<div class="lr ${lk}"><span class="ln">${AU.length + i + 1}</span>${fields.map(([f, l]) => f === 'age'
+    rows += `<div class="lr ${lk}"><span class="ln">${AU.length + i + 1}</span>${fields.map(([f, l]) => f === 'kind'
+      ? `<div class="seg f-kind" role="group" aria-label="${l}">${TVK.map(([v, t]) => `<button type="button" data-act="sKind" data-l="${dept}.${lk}" data-i="${i}" data-v="${v}" class="${o.kind === v ? 'on' : ''}">${t}</button>`).join('')}</div>`
+      : f === 'age'
       ? `<input class="fa" data-sl="${dept}.${lk}.${i}.${f}" value="${esc(o[f])}" placeholder="${l}" inputmode="numeric" autocomplete="off" aria-label="${l}">`
       : `<textarea class="ag f-${f}" rows="1" data-sl="${dept}.${lk}.${i}.${f}" placeholder="${l}" aria-label="${l}">${esc(o[f])}</textarea>`).join('')}<button type="button" class="btn sm ghost del" data-act="sDelRow" data-l="${dept}.${lk}" data-i="${i}" aria-label="Xóa dòng ${i + 1}">✕</button></div>`;
   }
@@ -1341,7 +1352,9 @@ function statsHTML(){
     </section>
     <section class="sec"><h2><span class="n">1</span>Cấp cứu</h2>${deptNums('cc')}${conBox('cc')}
       ${listBox('cc', 'er', ERF, 'Bệnh còn cấp cứu', 'er')}
-      ${listBox('cc', 'cvl', CVF, 'Bệnh chuyển viện', 'cvcc')}</section>
+      ${listBox('cc', 'cvl', CVF, 'Bệnh chuyển viện', 'cvcc')}
+      ${listBox('cc', 'tronl', TRF, 'Bệnh trốn viện', 'tron')}
+      ${listBox('cc', 'tvl', TVF, 'Bệnh tử vong (nội / ngoại viện)', 'tv')}</section>
     <section class="sec"><h2><span class="n">2</span>Hồi sức tích cực</h2>${deptNums('hs')}${conBox('hs')}
       ${hsBox()}
       ${listBox('hs', 'cvl', CVF, 'Bệnh chuyển viện', 'cvhs')}</section>
@@ -1364,10 +1377,13 @@ function statsHTML(){
       <div id="sPrinted" class="hint" style="margin:6px 0 0"></div>
       <div class="sub" style="margin-top:10px">Nội dung in kèm (mục II)</div>
       <div class="cks">
-        <label class="ck"><input type="checkbox" data-sp="sec.cv"${SP.sec.cv ? ' checked' : ''}><span>1. Bệnh chuyển viện</span></label>
-        <label class="ck"><input type="checkbox" data-sp="sec.er"${SP.sec.er ? ' checked' : ''}><span>2. Bệnh còn Cấp cứu</span></label>
-        <label class="ck"><input type="checkbox" data-sp="sec.hsp"${SP.sec.hsp ? ' checked' : ''}><span>3. Bệnh còn Hồi sức tích cực</span></label>
+        <label class="ck"><input type="checkbox" data-sp="sec.cv"${SP.sec.cv ? ' checked' : ''}><span>Bệnh chuyển viện</span></label>
+        <label class="ck"><input type="checkbox" data-sp="sec.tron"${SP.sec.tron ? ' checked' : ''}><span>Bệnh trốn viện</span></label>
+        <label class="ck"><input type="checkbox" data-sp="sec.tv"${SP.sec.tv ? ' checked' : ''}><span>Bệnh tử vong</span></label>
+        <label class="ck"><input type="checkbox" data-sp="sec.er"${SP.sec.er ? ' checked' : ''}><span>Bệnh còn Cấp cứu</span></label>
+        <label class="ck"><input type="checkbox" data-sp="sec.hsp"${SP.sec.hsp ? ' checked' : ''}><span>Bệnh còn Hồi sức tích cực</span></label>
       </div>
+      <p class="hint" style="margin:2px 0 6px">Mục trốn viện, tử vong chỉ in khi kíp (hoặc đợt tổng kết) có ca. Các mục in ra được đánh số theo thứ tự trên.</p>
       <div class="row" style="margin-top:4px"><button class="btn pri" data-act="sPreview">👁 Xem lại phiếu &amp; in</button><button class="btn dan" data-act="sDel">🗑 Xóa số liệu ngày này</button></div>
     </section>
   </main>`;
@@ -1470,6 +1486,13 @@ function updateStats(){
     setChip(`chip-${dept}-cvl`, cvRows(SD, dept).length, V(SD, dept, 'cv'), 'khớp số chuyển viện');
   });
   setChip('chip-cc-er', (sec(SD, 'cc').er || []).filter(rowFilled).length, Math.max(conOf(SD, 'cc'), 0), 'khớp Hiện còn');
+  const cx = sec(SD, 'cc');
+  setChip('chip-cc-tronl', (cx.tronl || []).filter(rowFilled).length, ni(cx.tron), 'khớp số trốn viện');
+  { const L = (cx.tvl || []).filter(rowFilled), c = $('#chip-cc-tvl');
+    setChip('chip-cc-tvl', L.length, ni(cx.tvn) + ni(cx.tvng), 'khớp số tử vong');
+    const a = L.filter(x => x.kind === 'n').length, b = L.filter(x => x.kind === 'ng').length;
+    if(c && L.length && L.length === ni(cx.tvn) + ni(cx.tvng) && (a !== ni(cx.tvn) || b !== ni(cx.tvng))){
+      c.className = 'chip warn'; c.textContent = a + b < L.length ? `${L.length} BN · chưa chọn nội / ngoại viện` : `Lệch nội viện ${a}/${ni(cx.tvn)} · ngoại viện ${b}/${ni(cx.tvng)}`; } }
   const rows = statRows(), notes = rowNotes(rows);
   $('#sTables').innerHTML = `<div class="tw">${statTable(rows, false)}</div>`
     + notes.map(t => `<div class="snote warn">${esc(t)}</div>`).join('');
@@ -1478,7 +1501,7 @@ function updateStats(){
   if(rh){ const R = rangeRow(rows);
     rh.innerHTML = !R ? 'Chọn ngày bắt đầu và ngày kết thúc của đợt.'
       : `Đợt <b>${R.dates.length} kíp trực</b>: từ 7:00 ${fmtD(R.dates[0])} đến 7:00 ${fmtD(addDays(R.dates[R.dates.length - 1], 1))}. `
-      + (rangeMode(rows) ? 'Bản in là phiếu <b>Tổng kết số liệu kíp trực</b>: thành phần trực từng ngày, bảng số liệu, bệnh chuyển viện cả đợt, rồi bệnh còn Cấp cứu và HSTC cuối đợt.'
+      + (rangeMode(rows) ? 'Bản in là phiếu <b>Tổng kết số liệu kíp trực</b>: thành phần trực từng ngày, bảng số liệu, bệnh chuyển viện, trốn viện, tử vong cả đợt, rồi bệnh còn Cấp cứu và HSTC cuối đợt.'
         : 'Đang chọn in cả dòng ngày đang xem nên bản in vẫn là phiếu giao ban. Bỏ chọn ô In ở các dòng ngày đang xem để in riêng phiếu tổng kết.'); }
   const pr = $('#sPrinted'), pl = (r && r.printed) || [];
   if(pr) pr.innerHTML = pl.length ? `🖨 Đã in ${pl.length} lần · lần gần nhất lúc <b>${fmtTS(pl[pl.length - 1])}</b>` : 'Phiếu ngày này chưa được in.';
@@ -1513,10 +1536,26 @@ function listTable(L, fields, withDate){
   return `<table class="pt"><tr><th style="width:4%">TT</th>${withDate ? '<th style="width:9%">Ngày</th>' : ''}${fields.map(([f, l]) => `<th${f === 'age' ? ' style="width:7%"' : ''}>${l}</th>`).join('')}</tr>
     ${L.map((x, i) => `<tr><td>${i + 1}</td>${withDate ? `<td>${fmtDM(x.date)}</td>` : ''}${fields.map(([f]) => `<td>${esc(x[f])}</td>`).join('')}</tr>`).join('')}</table>`;
 }
+/* khoảng ngày của các danh sách in kèm: nếu có in dòng tổng kết thì lấy cả khoảng tổng kết (đợt > tuần > 2 ngày) */
+function printSpan(){ const rows = statRows(), sel = k => rows.find(r => r.key === k && ['cc','hs','dt'].some(d => SP[d][k]));
+  return sel('range') || sel('week') || sel('two') || rows[0]; }
+/* danh sách gõ tay của một khoảng ngày (kèm ngày), chỉ những ngày đã có số liệu */
+function periodList(dept, lk, dates){ return [...new Set(dates)].sort().filter(d => DB.daily[d]).flatMap(d => (sec(d, dept)[lk] || []).filter(rowFilled).map(x => Object.assign({ date:d }, x))); }
+/* Bệnh trốn viện / Bệnh tử vong (Cấp cứu). Không có ca nào và bảng số liệu ghi 0 thì không in mục này */
+function ccListPrint(lk, title, F, totOf, splitOf){
+  const rw = printSpan(), day = rw.key === 'day', L = periodList('cc', lk, rw.dates), o = agg('cc', rw.dates), tot = o ? totOf(o) : 0;
+  if(!L.length && !tot) return '';
+  const cellOf = (x, f) => f === 'name' ? `<td>${day ? '' : `<span class="tg">${fmtDM(x.date)}</span>`}${esc(x.name)}</td>` : f === 'kind' ? `<td>${esc(kindName(x.kind))}</td>` : `<td>${esc(x[f])}</td>`;
+  const table = !L.length ? `<div class="em">Chưa ghi danh sách</div>` : `<table class="pt"><tr><th style="width:4%">TT</th>${F.map(([f, l]) => `<th${f === 'age' ? ' style="width:7%"' : f === 'name' ? ' style="width:26%"' : f === 'kind' ? ' style="width:18%"' : ''}>${l}</th>`).join('')}</tr>
+    ${L.map((x, i) => `<tr><td>${i + 1}</td>${F.map(([f]) => cellOf(x, f)).join('')}</tr>`).join('')}</table>`;
+  return `<div class="iisec"><h4>❖ ${title}${day ? '' : ` – ${rw.label.toLowerCase()} (${rw.sub})`}: ${L.length} BN${splitOf ? splitOf(L) : ''}${tot !== L.length ? ` <span class="k">(bảng số liệu ghi ${tot} BN)</span>` : ''}</h4>${table}</div>`;
+}
+const tronPrint = () => ccListPrint('tronl', 'Bệnh trốn viện', TRF, o => o.tron);
+const tvPrint = () => ccListPrint('tvl', 'Bệnh tử vong', TVF, o => o.tvn + o.tvng,
+  L => { const a = L.filter(x => x.kind === 'n').length, b = L.filter(x => x.kind === 'ng').length; return a || b ? ` <span class="k">(nội viện ${a} · ngoại viện ${b})</span>` : ''; });
 function cvPrint(){
-  /* gộp Cấp cứu + HSTC; nếu có in dòng tổng kết thì lấy cả khoảng tổng kết (tuần ưu tiên hơn 2 ngày) */
-  const rows = statRows(), sel = k => rows.find(r => r.key === k && ['cc','hs','dt'].some(d => SP[d][k]));
-  const rw = sel('range') || sel('week') || sel('two') || rows[0], day = rw.key === 'day';
+  /* gộp Cấp cứu + HSTC */
+  const rw = printSpan(), day = rw.key === 'day';
   const L = ['cc','hs'].flatMap(d => periodCV(d, rw.dates).map(x => Object.assign({ khoa:DEPT[d].name }, x))).sort((a, b) => a.date.localeCompare(b.date));
   const tot = ['cc','hs'].reduce((s, d) => { const o = agg(d, rw.dates); return s + (o ? o.cv : 0); }, 0);
   /* ngày kíp và khoa ghi nhỏ phía trên tên BN (một kíp thì chỉ ghi khoa) */
@@ -1543,7 +1582,7 @@ function hsPrint(suf){
 function statsPrintHTML(){
   const rows = statRows(), r = DB.daily[SD] || {}, st = r.staff || {}, gb = addDays(SD, 1);
   const any = ['cc','hs','dt'].some(d => rows.some(rw => SP[d][rw.key]));
-  if(!any && !SP.sec.er && !SP.sec.hsp && !SP.sec.cv) return '';
+  if(!any && !['er','hsp','cv','tron','tv'].some(k => SP.sec[k])) return '';
   const gbo = `<div class="gbo"><div>Bệnh viện Trường Đại học Y dược Cần Thơ</div><div><b>Khoa Cấp cứu - HSTC</b></div></div>`;
   if(rangeMode(rows)){
     /* phiếu tổng kết đợt (lễ, Tết): thành phần trực từng ngày, bảng số liệu, bệnh còn cuối đợt, chuyển viện cả đợt */
@@ -1558,6 +1597,8 @@ function statsPrintHTML(){
     if(any) o += statTable(rows, true);
     const parts = [];
     if(SP.sec.cv) parts.push(cvPrint());
+    if(SP.sec.tron){ const t = tronPrint(); if(t) parts.push(t); }
+    if(SP.sec.tv){ const t = tvPrint(); if(t) parts.push(t); }
     if(SP.sec.er){ const L = (sec(b, 'cc').er || []).filter(rowFilled); parts.push(`<div class="iisec"><h4>❖ Bệnh còn Cấp cứu cuối đợt (${fmtD(b)}): ${L.length} BN</h4>${listTable(L, ERF)}</div>`); }
     if(SP.sec.hsp) parts.push(`<div class="iisec">${atSD(b, () => hsPrint(` cuối đợt (${fmtD(b)})`))}</div>`);
     return o + numParts(parts);
@@ -1572,6 +1613,8 @@ function statsPrintHTML(){
   if(any) o += statTable(rows, true);
   const parts = [];
   if(SP.sec.cv) parts.push(cvPrint());
+  if(SP.sec.tron){ const t = tronPrint(); if(t) parts.push(t); }
+  if(SP.sec.tv){ const t = tvPrint(); if(t) parts.push(t); }
   if(SP.sec.er){ const L = (sec(SD, 'cc').er || []).filter(rowFilled); parts.push(`<div class="iisec"><h4>❖ Bệnh còn Cấp cứu: ${L.length} BN</h4>${listTable(L, ERF)}</div>`); }
   if(SP.sec.hsp) parts.push(`<div class="iisec">${hsPrint()}</div>`);
   o += numParts(parts);
@@ -1586,7 +1629,7 @@ function previewStats(){ const o = statsPrintHTML(); if(!o){ toast('Chưa chọn
 function rangeRow(rows){ return rows.find(r => r.key === 'range') || null; }
 /* in riêng phiếu tổng kết khi có dòng tổng kết đợt được chọn in và không in dòng ngày đang xem */
 function rangeMode(rows){ const D = ['cc','hs','dt']; return !!rangeRow(rows) && D.some(d => SP[d].range) && !D.some(d => SP[d].day); }
-/* đánh số mục in kèm theo thứ tự: 1. Chuyển viện, 2. Bệnh còn Cấp cứu, 3. Bệnh còn HSTC (bỏ mục không chọn) */
+/* đánh số mục in kèm theo thứ tự: Chuyển viện, Trốn viện, Tử vong, Bệnh còn Cấp cứu, Bệnh còn HSTC (bỏ mục không chọn / không có ca) */
 function numParts(parts){ return parts.map((x, i) => x.replace('❖ ', (i + 1) + '. ')).join(''); }
 function atSD(d, fn){ const k = SD; SD = d; try { return fn(); } finally { SD = k; } }
 function loadRange(){ const a = [SU.r1, SU.r2].filter(Boolean).sort()[0]; if(a) loadBoth(addDays(a, -14)).then(ch => { if(ch) updateStats(); }); }
@@ -2167,6 +2210,9 @@ document.addEventListener('click', e => {
     sAddRow(){ const [d, lk] = b.dataset.l.split('.'), r = recOf(SD, true), L = (r[d][lk] = r[d][lk] || []);
       if(!L.length) L.push({}); L.push({}); r.updated = Date.now(); save(); rerender();
       const el = document.querySelector(`[data-sl="${d}.${lk}.${L.length - 1}.name"]`); if(el) el.focus(); },
+    sKind(){ const [d, lk] = b.dataset.l.split('.'), i = +b.dataset.i, r = recOf(SD, true), L = (r[d][lk] = r[d][lk] || []);
+      while(L.length <= i) L.push({}); L[i].kind = L[i].kind === b.dataset.v ? '' : b.dataset.v; r.updated = Date.now(); save();
+      b.parentNode.querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === L[i].kind)); updateStats(); },
     sDelRow(){ const [d, lk] = b.dataset.l.split('.'), i = +b.dataset.i, L = sec(SD, d)[lk];
       if(L && i < L.length){ L.splice(i, 1); DB.daily[SD].updated = Date.now(); save(); }
       rerender(); },
