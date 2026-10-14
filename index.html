@@ -11,7 +11,7 @@
 :root{
   --bg:#f2f0eb;--card:#fff;--card2:#faf9f6;--ink:#17252d;--muted:#5d6b73;--line:#dcd8cf;--soft:#ece9e2;
   --pri:#0f4c5c;--pri2:#16677a;--pri-ink:#fff;--pri-soft:#dbeaee;
-  --red:#c0392b;--red-soft:#fae3df;--amb:#b97a05;--amb-soft:#fbefd0;--grn:#2c7a4b;--grn-soft:#dcf0e3;
+  --red:#c0392b;--red-soft:#fae3df;--amb:#b97a05;--amb-soft:#fbefd0;--yel:#ffe27a;--yel-ink:#5c4300;--grn:#2c7a4b;--grn-soft:#dcf0e3;
   --blue:#2160a8;--org:#d26a12;
   --cS:#2160a8;--cB:#7a3f9e;--cA:#0f7a6c;--cR:#c2410c;--cC:#4b5563;
   --shadow:0 1px 2px rgba(20,30,40,.06),0 2px 8px rgba(20,30,40,.05);
@@ -20,14 +20,14 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#10171b;--card:#18222a;--card2:#1c2730;--ink:#e6ecef;--muted:#9aa9b1;--line:#2e3c46;--soft:#22303a;
   --pri:#5fb3c6;--pri2:#7cc3d3;--pri-ink:#0b1a20;--pri-soft:#1d3640;
-  --red:#ef7a6c;--red-soft:#3d2320;--amb:#e8b24a;--amb-soft:#3a3018;--grn:#6cc893;--grn-soft:#1b3427;
+  --red:#ef7a6c;--red-soft:#3d2320;--amb:#e8b24a;--amb-soft:#3a3018;--yel:#5a4a12;--yel-ink:#ffe08a;--grn:#6cc893;--grn-soft:#1b3427;
   --blue:#78aef0;--org:#f0a060;--cS:#78aef0;--cB:#c79be3;--cA:#5fd0bf;--cR:#f29a6a;--cC:#9aa9b1;
   --shadow:none;
 }}
 :root[data-theme="dark"]{
   --bg:#10171b;--card:#18222a;--card2:#1c2730;--ink:#e6ecef;--muted:#9aa9b1;--line:#2e3c46;--soft:#22303a;
   --pri:#5fb3c6;--pri2:#7cc3d3;--pri-ink:#0b1a20;--pri-soft:#1d3640;
-  --red:#ef7a6c;--red-soft:#3d2320;--amb:#e8b24a;--amb-soft:#3a3018;--grn:#6cc893;--grn-soft:#1b3427;
+  --red:#ef7a6c;--red-soft:#3d2320;--amb:#e8b24a;--amb-soft:#3a3018;--yel:#5a4a12;--yel-ink:#ffe08a;--grn:#6cc893;--grn-soft:#1b3427;
   --blue:#78aef0;--org:#f0a060;--cS:#78aef0;--cB:#c79be3;--cA:#5fd0bf;--cR:#f29a6a;--cC:#9aa9b1;--shadow:none;
 }
 *{box-sizing:border-box}
@@ -57,6 +57,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--pri2);box-shadow:0 0 
 input:disabled,textarea:disabled{opacity:.8;background:var(--soft)}
 .calc{font-size:12px;color:var(--pri);font-weight:600}
 .calc.warn{color:var(--red)}.calc.mid{color:var(--amb)}
+.calc.due{display:inline-block;white-space:nowrap;background:var(--yel);font-size:11.5px;color:var(--yel-ink);border-radius:5px;padding:1px 7px;margin-left:6px}.calc.due::after{content:' ⚠'}
 .ck{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border:1px solid var(--line);border-radius:8px;background:var(--card2);cursor:pointer;user-select:none;min-height:31px;font-size:13.5px}
 .ck input{width:16px;height:16px;accent-color:var(--pri);margin:0}
 .ck:has(input:checked){border-color:var(--pri2);background:var(--pri-soft)}
@@ -182,7 +183,7 @@ input[data-k$=".fluid.bal"]::placeholder{color:var(--pri);opacity:.8;font-weight
 .sedb{gap:6px}.sedr{display:grid;grid-template-columns:1fr 80px auto 34px;gap:6px;align-items:center}.sedr .u{font-size:12px;color:var(--muted)}
 .mi .sym{font-weight:700;width:34px;text-align:center}
 .mi select{width:auto;min-height:34px;padding:4px 6px}
-.mi2{display:grid;grid-template-columns:1fr 1.15fr 1.25fr .8fr;gap:6px;margin:-2px 0 4px 40px;padding:6px 8px;border-radius:8px;background:var(--card2)}
+.mi2{display:grid;grid-template-columns:.8fr 1.2fr 1.4fr minmax(112px,.7fr);gap:6px;margin:-2px 0 4px 40px;padding:6px 8px;border-radius:8px;background:var(--card2)}
 .mi2 .f>span{font-size:11.5px}.mi2 select{width:100%;min-height:34px}
 .mi2 .vipw{grid-column:1/-1;font-size:12px;color:var(--amb);font-weight:600}.mi2 .vipw.bad{color:var(--red)}
 @media (max-width:560px){.mi2{grid-template-columns:1fr 1fr;margin-left:0}}
@@ -864,10 +865,15 @@ function vpLine(p){
 }
 const MK = { line:['●','Đường truyền/catheter'], drain:['▲','Dẫn lưu/sonde'], ulcer:['■','Loét/tổn thương da'] };
 const LINE_KIND = ['Ngoại vi', 'CVC', 'PICC', 'Động mạch', 'Catheter lọc máu', 'Khác'];
+const LINE_KIND_LBL = { 'Ngoại vi':'Kim luồn', 'Catheter lọc máu':'Cath lọc máu' };
+/* ngưỡng nhắc (tô vàng) theo ngày lưu: sonde nuôi ăn, sonde tiểu từ ngày thứ 8; kim luồn ngoại vi từ ngày thứ 4 */
+const DWELL_DUE = { ngt:8, foley:8, pivc:4 };
+function dueOf(key, obj){ const k = key === 'line' ? (obj && obj.kind === 'Ngoại vi' ? 'pivc' : '') : key; return DWELL_DUE[k] || 0; }
+function dwellTag(n, lim){ return n ? 'ngày thứ ' + n + (lim && n >= lim ? ' ⚠' : '') : ''; }
 /* VIP score (Visual Infusion Phlebitis): 0 bình thường · 1 theo dõi · ≥2 rút, đặt lại vị trí khác */
 const VIP = [['0','0 · Bình thường'],['1','1 · Nghi viêm'],['2','2 · Viêm sớm'],['3','3 · Viêm vừa'],['4','4 · Viêm tiến triển'],['5','5 · Viêm tắc mạch']];
 function vipNote(v){ const n = parseInt(v, 10); return !isFinite(n) || n < 1 ? '' : n === 1 ? 'VIP 1: theo dõi sát vị trí đặt' : 'VIP ≥ 2: rút kim, đặt lại ở vị trí khác'; }
-function lineText(mk, h){ const d = dwellDays(mk.date, mk.time, h.date); return [mk.kind, filled(mk.vip) ? 'VIP ' + mk.vip : '', mk.date ? 'đặt ' + fmtDM(mk.date) + (filled(mk.time) ? ' ' + mk.time : '') + (d ? ' (' + d + 'n)' : '') : ''].filter(Boolean).join(' · '); }
+function lineText(mk, h){ const d = dwellDays(mk.date, mk.time, h.date); return [mk.kind === 'Ngoại vi' ? 'Kim luồn ngoại vi' : mk.kind, filled(mk.vip) ? 'VIP ' + mk.vip : '', mk.date ? 'đặt ' + fmtDM(mk.date) + (filled(mk.time) ? ' ' + mk.time : '') + (d ? ', ' + dwellTag(d, dueOf('line', mk)) : '') : ''].filter(Boolean).join(' · '); }
 
 function newHandover(part){
   const h = { id:uid(), part, date:reportDay(), shift:'', giver:'', receiver:'', head:'', stats:{}, patients:[], out:[], inc:{}, signGiverAt:null, signReceiverAt:null, created:Date.now(), updated:Date.now() };
@@ -1281,7 +1287,7 @@ function setSD(d){ setSDquiet(d || reportDay()); rerender(); loadBoth(addDays(mo
 function numF(dept, k, label, cls){
   const v = sec(SD, dept)[k] || '';
   const au = dept === 'hs' && HS_AUTO[k];
-  return `<label class="sf ${cls||''}${au ? ' cu' : ''}"><span>${label}</span><input data-sk="${dept}.${k}" value="${esc(v)}" inputmode="numeric" placeholder="0" autocomplete="off">${k === 'cu' ? `<small class="h" id="cuh-${dept}"></small>` : au ? `<small class="h" id="ah-${dept}-${k}"></small>` : ''}</label>`;
+  return `<label class="sf ${cls||''}${au ? ' cu' : ''}"><span>${label}</span><input data-sk="${dept}.${k}" value="${esc(v)}" inputmode="numeric" enterkeyhint="${dept === 'dt' ? 'done' : 'next'}" placeholder="0" autocomplete="off">${k === 'cu' ? `<small class="h" id="cuh-${dept}"></small>` : au ? `<small class="h" id="ah-${dept}-${k}"></small>` : ''}</label>`;
 }
 function deptNums(dept){
   const D = DEPT[dept], lab = k => D.cols.find(c => c[0] === k)[1];
@@ -2067,7 +2073,7 @@ function bodyMap(p, i){
     ${m.type === 'ulcer' ? `<select data-k="${Q}grade" ${dis()}><option value="">Độ</option>${['1','2','3','4','KXĐ','DTI'].map(g => `<option ${m.grade===g?'selected':''}>${g}</option>`).join('')}</select>` : '<span></span>'}
     ${LOCK ? '' : `<button class="btn sm ghost" data-act="delMark" data-i="${i}" data-j="${j}" title="Xóa">✕</button>`}</div>`
     + (m.type === 'line' ? `<div class="mi2">
-      <label class="f"><span>Loại</span><select data-k="${Q}kind" ${dis()}><option value="">Chọn…</option>${LINE_KIND.map(x => `<option ${m.kind===x?'selected':''}>${x}</option>`).join('')}</select></label>
+      <label class="f"><span>Loại</span><select data-k="${Q}kind" ${dis()}><option value="">Chọn…</option>${LINE_KIND.map(x => `<option value="${x}" ${m.kind===x?'selected':''}>${LINE_KIND_LBL[x] || x}</option>`).join('')}</select></label>
       <label class="f"><span>VIP score</span><select data-k="${Q}vip" ${dis()}><option value="">–</option>${VIP.map(([v,l]) => `<option value="${v}" ${String(m.vip)===v?'selected':''}>${l}</option>`).join('')}</select></label>
       ${fld('Ngày đặt', Q+'date', m.date, {type:'date', w:'dt', calc:calc('dwell', Q+'date')})}${fld('Giờ đặt', Q+'time', m.time, {type:'time'})}
       ${vn ? `<div class="vipw${parseInt(m.vip,10) >= 2 ? ' bad' : ''}">⚠ ${vn}</div>` : ''}</div>` : ''); }).join('');
@@ -2105,6 +2111,10 @@ function checks(h){
     else if(h.patients.some((q, j) => j !== i && normT(q.mrn) === normT(p.mrn))) out.push(`${who}: mã bệnh án ${p.mrn} bị trùng với BN khác trong phiếu`);
     if(!p.level) out.push(`${who}: chưa chọn mức độ`);
     if(h.part === 'dd') (p.marks || []).forEach((mk, j) => { if(mk.type === 'line' && parseInt(mk.vip, 10) >= 2) out.push(`${who}: đường truyền ●${j + 1} VIP ${mk.vip}, cần rút và đặt lại vị trí khác`); });
+    if(h.part === 'dd'){
+      (p.marks || []).forEach((mk, j) => { const lim = mk.type === 'line' ? dueOf('line', mk) : 0, d = lim && dwellDays(mk.date, mk.time, h.date); if(d && d >= lim) out.push(`${who}: kim luồn ●${j + 1} đã đến ngày thứ ${d}, đánh giá lại / cân nhắc thay`); });
+      TUBES.forEach(([k, l]) => { const t = (p.tubes || {})[k], lim = dueOf(k), d = lim && t && dwellDays(t.date, t.time, h.date); if(d && d >= lim) out.push(`${who}: ${l.toLowerCase()} đã đến ngày thứ ${d}, đánh giá lại / cân nhắc thay`); });
+    }
     if(h.part === 'bs'){
       if(!p.allergy) out.push(`${who}: chưa ghi dị ứng`);
       if(!hasVS(p.vs)) out.push(`${who}: chưa ghi dấu hiệu sinh tồn lúc bàn giao`);
@@ -2136,7 +2146,9 @@ function updateDerived(){
   document.querySelectorAll('[data-calc]').forEach(el => {
     const v = getP(h, el.dataset.path), t = el.dataset.calc; el.className = 'calc'; let txt = '';
     if(t === 'day' || t === 'abx'){ const n = dayN(v, h.date); if(n) txt = '→ ngày thứ ' + n; }
-    else if(t === 'dwell'){ const n = dwellDays(v, getP(h, el.dataset.path.replace(/\.date$/, '.time')), h.date); if(n) txt = ' · ' + n + ' ngày'; }
+    else if(t === 'dwell'){ const base = el.dataset.path.replace(/\.date$/, ''), n = dwellDays(v, getP(h, base + '.time'), h.date);
+      const tk = (base.match(/\.tubes\.(\w+)$/) || [])[1], lim = tk ? dueOf(tk) : /\.marks\.\d+$/.test(base) ? dueOf('line', getP(h, base)) : 0;
+      if(n){ txt = ' · ngày thứ ' + n; if(lim && n >= lim){ txt = 'ngày thứ ' + n; el.classList.add('due'); el.title = `Đã đến ngày thứ ${lim} trở đi: đánh giá lại, cân nhắc thay hoặc rút`; } else el.title = ''; } }
     else if(t === 'braden' && v !== '' && v != null){ const n = +v; if(n <= 9){ txt = '· rất cao'; el.classList.add('warn'); } else if(n <= 12){ txt = '· cao'; el.classList.add('warn'); } else if(n <= 14){ txt = '· trung bình'; el.classList.add('mid'); } else if(n <= 18){ txt = '· thấp'; el.classList.add('mid'); } else txt = '· không nguy cơ'; }
     else if(t === 'morse' && v !== '' && v != null){ const n = +v; if(n >= 45){ txt = '· nguy cơ cao'; el.classList.add('warn'); } else if(n >= 25){ txt = '· trung bình'; el.classList.add('mid'); } else txt = '· thấp'; }
     el.textContent = txt;
@@ -2156,6 +2168,18 @@ function updateDerived(){
 }
 
 /* ================= EVENTS ================= */
+/* trang Số liệu: Enter nhảy sang ô số tiếp theo (Shift+Enter quay lại ô trước); ô cuối thì đóng bàn phím */
+document.addEventListener('keydown', e => {
+  const el = e.target;
+  if(e.key !== 'Enter' || e.isComposing || !el.dataset || !el.dataset.sk) return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll('input[data-sk]')].filter(x => !x.disabled && x.offsetParent), i = all.indexOf(el);
+  const nx = all[i + (e.shiftKey ? -1 : 1)];
+  if(!nx){ el.blur(); return; }
+  nx.focus(); nx.select();
+  const r = nx.getBoundingClientRect(), top = 90;   /* chừa chỗ cho thanh tiêu đề dính */
+  if(r.top < top || r.bottom > innerHeight - 20) window.scrollBy({ top: r.top - top - 40, behavior:'smooth' });
+});
 function touched(){ if(!cur) return; cur.updated = Date.now(); save(); updateDerived(); }
 document.addEventListener('input', e => {
   { const ds = e.target.dataset || {}; if(ds.ov){ ovInput(e.target); return; } if(ds.hv){ hsVital(e.target); return; } if(ds.sk || ds.sl || ds.st){ sInput(e.target); return; } }
@@ -2475,10 +2499,10 @@ function ppDD(p, h){
   let o = `<div class="pp lv-${p.level||'none'}">${ppHead(p, h)}<div class="pl1">Chẩn đoán: ${pv(p.dx)}${p.prevR ? `<br><span class="k">Kíp trước dặn:</span> ${esc(p.prevR)}` : ''}</div>`;
   o += `<div class="pr"><div class="lt S">S</div><div class="tx"><span class="k">DHST bất thường / cảnh báo sớm:</span> ${pv(s.vitals)}<br><span class="k">Biến cố và xử trí:</span> ${pv(s.event)}</div></div>`;
   o += `<div class="pr"><div class="lt B">B</div><div class="tx">GCS ${pv(b.gcs)} · RASS ${pv(b.rass)} · VAS/CPOT ${pv(b.pain)} · CAM-ICU ${b.cam==='pos'?'(+)':b.cam==='neg'?'(−)':'……'}<br>Braden ${pv(b.braden)} · Morse ${pv(b.morse)} · ${box(b.restraint,'Cố định BN')} · ${box(b.iso,'Cách ly')}${b.isoText?': '+esc(b.isoText):''}</div></div>`;
-  const tRow = (l, t) => { t = t || {}; const d = dwellDays(t.date, t.time, h.date), st = [filled(t.out) ? 'ra ' + esc(t.out) + ' ml' : '', esc(t.status || '')].filter(Boolean).join(' · ');
-    return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? esc(whenText(t.date, t.time)) + (d ? ' ('+d+'n)' : '') : ''}</td><td>${st}</td></tr>`; };
+  const tRow = (l, t, key) => { t = t || {}; const d = dwellDays(t.date, t.time, h.date), st = [filled(t.out) ? 'ra ' + esc(t.out) + ' ml' : '', esc(t.status || '')].filter(Boolean).join(' · ');
+    return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? esc(whenText(t.date, t.time)) + (d ? ` (${key && d >= dueOf(key) ? '<b>' + dwellTag(d, dueOf(key)) + '</b>' : dwellTag(d)})` : '') : ''}</td><td>${st}</td></tr>`; };
   const D = ensureDrains(p), Df = D.filter((t, j) => j === 0 || [t.site, t.date, t.status, t.out].some(filled)), dS = drainSum(p);
-  const tubes = TUBES.map(([k,l]) => tRow(l, (p.tubes||{})[k])).join('') + Df.map((t, j) => tRow(drainLabel(Df, j), t)).join('');
+  const tubes = TUBES.map(([k,l]) => tRow(l, (p.tubes||{})[k], DWELL_DUE[k] ? k : '')).join('') + Df.map((t, j) => tRow(drainLabel(Df, j), t)).join('');
   const marks = (p.marks||[]).map((mk,j) => { const lt = mk.type === 'line' ? lineText(mk, h) : ''; return `${MK[mk.type][0]}${j+1}${mk.grade?' độ '+esc(mk.grade):''}${mk.note?': '+esc(mk.note):''}${lt ? ' (' + esc(lt) + ')' : ''}`; }).join(' · ');
   const med = (l, v) => box(v && v.on, l) + (v && v.rate ? ' ' + esc(v.rate) + ' ml/h' : '');
   o += `<div class="pr"><div class="lt A">A</div><div class="tx"><div class="mini">${mapSVG(p,'front',0,1)}${mapSVG(p,'back',0,1)}
