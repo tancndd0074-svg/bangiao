@@ -118,6 +118,17 @@ input:disabled,textarea:disabled{opacity:.8;background:var(--soft)}
 .pill.red.hot{background:var(--red);color:#fff;font-weight:700}
 .pc-top{display:flex;align-items:center}
 .pc-top .pc-h{flex:1;min-width:0}
+.hstc-go{flex:none;display:inline-flex;align-items:center;gap:4px;height:28px;margin-right:6px;padding:0 9px;border:1px solid var(--pri);background:var(--card);color:var(--pri);border-radius:7px;cursor:pointer;font-weight:650;font-size:12.5px;white-space:nowrap}
+.hstc-go:hover{background:var(--pri-soft)}
+@media (max-width:520px){.hstc-go .t{display:none}.hstc-go{padding:0 7px}}
+.hx{border:1px dashed var(--line);border-radius:10px;padding:6px 10px;background:var(--card2)}
+.hx-r{display:grid;grid-template-columns:minmax(0,1.5fr) auto minmax(0,2fr) auto;gap:4px 10px;align-items:center;padding:6px 0;border-top:1px dashed var(--line);font-size:13.5px}
+.hx-r:first-child{border-top:0}
+.hx-r .v{font-weight:750;color:var(--pri);white-space:nowrap}.hx-r .bd{color:var(--muted)}.hx-r small{grid-column:1/-2;color:var(--muted);font-size:11.5px}
+.hx-r .del{grid-row:1/3;grid-column:4}
+.hx-e{font-size:12.5px;color:var(--muted);padding:4px 0}
+.hx-auto{font-size:12px;color:var(--muted);margin-top:6px}
+@media (max-width:560px){.hx-r{grid-template-columns:minmax(0,1fr) auto auto}.hx-r .bd{grid-column:1/3}.hx-r .del{grid-column:3}}
 .rm{flex:none;width:28px;height:28px;margin-right:8px;border:1px solid var(--line);background:var(--card);border-radius:7px;color:var(--red);cursor:pointer;font-weight:700;font-size:13px}
 .rm:hover{background:var(--red-soft)}
 .outs{border:1px dashed var(--line);border-radius:10px;padding:6px 10px 8px;margin:4px 0 10px;background:var(--card2)}
@@ -463,6 +474,17 @@ window.BG_FIREBASE_CONFIG = {
 window.BG_ADMINS = ["tntan.bv@ctump.edu.vn"];
 /* Mật khẩu ban đầu cho mọi tài khoản admin tạo (Firebase yêu cầu ít nhất 6 ký tự). */
 window.BG_DEFAULT_PW = "123456";
+/* Công cụ tính điểm HSTC (icusuite): đăng nhập dùng chung tài khoản + đồng bộ danh sách thành viên.
+   Cấu hình Firebase công khai được (giống trong icusuite); bảo mật nằm ở Security Rules. */
+window.BG_HSTC_CONFIG = {
+  apiKey: "AIzaSyC76DQWvsFoXJV8yV-kWB_FoZO0inckXss",
+  authDomain: "icusuite.firebaseapp.com",
+  projectId: "icusuite",
+  storageBucket: "icusuite.firebasestorage.app",
+  messagingSenderId: "464431949903",
+  appId: "1:464431949903:web:44d744769be63d9f76223a"
+};
+window.BG_HSTC_ADMINS = ["tntan.bv@ctump.edu.vn"];
 </script>
 </head>
 <body>
@@ -678,6 +700,7 @@ window.App = {
     Sync.ready = true; lastSaved = ''; SD = null;
     show(null, 'home');
     if(me.defaultPw) setTimeout(() => openChangePw(true), 300);
+    setTimeout(hstcPull, 400);
   },
   remote: applyRemote,
   stop(){ if(Sync.t) Sync.flush(); Sync.ready = false; cur = null; DB = { handovers:[], daily:{} }; const a = document.getElementById('app'); if(a) a.innerHTML = ''; }
@@ -701,6 +724,90 @@ function dwellDays(date, time, kip){
   if(/^\d{1,2}:\d{2}/.test(time || '') && String(time).padStart(5, '0') < '07:00'){ const x = new Date(date + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() - 1); d = x.toISOString().slice(0, 10); }
   return dayN(d, kip);
 }
+/* ================= LIÊN KẾT CÔNG CỤ TÍNH ĐIỂM HSTC (icusuite) =================
+   Hai công cụ cùng địa chỉ gốc (tancndd0074-svg.github.io/bangiao và /icusuite).
+   - Nút "Chấm điểm HSTC" ở thẻ BN phiếu điều dưỡng: để thông tin BN vào localStorage (HS_OUT) rồi mở công cụ HSTC;
+     bên đó đọc một lần rồi xóa — tên BN không nằm trên đường link.
+   - Chấm xong, công cụ HSTC xếp điểm vào hộp thư HS_IN; phiếu tự lấy về: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse
+     điền vào ô sẵn có ở mục B; thang điểm khác vào khung "Các thang điểm khác đã chấm trong công cụ HSTC". */
+const HS_OUT = 'bg.hstcHandoff', HS_IN = 'bg.hstcInbox';
+const HSTC_URL = () => new URL('../icusuite/', location.href).href;
+/* thang điểm của công cụ HSTC → ô có sẵn trong phiếu (mục B) */
+const HSTC_MAP = {
+  gcs:   x => ['gcs', x.score != null ? String(x.score) : x.tag],
+  rass:  x => ['rass', x.tag],
+  cpot:  x => ['pain', 'CPOT ' + x.tag],
+  vas:   x => ['pain', 'VAS ' + x.tag],
+  camicu:x => /\+/.test(x.tag) ? ['cam', 'pos'] : /[–−-]/.test(x.tag) ? ['cam', 'neg'] : null,
+  braden:x => ['braden', x.score != null ? String(x.score) : x.tag],
+  morse: x => ['morse', x.score != null ? String(x.score) : x.tag]
+};
+const HSTC_FIELD = { gcs:'GCS', rass:'RASS', pain:'VAS / CPOT', cam:'CAM-ICU', braden:'Braden', morse:'Morse' };
+function hstcOpen(h, p){
+  if(!h || !p) return;
+  const miss = [!filled(p.name) && 'họ tên', !filled(p.age) && 'tuổi', !filled(p.bed) && 'số giường'].filter(Boolean);
+  try {
+    localStorage.setItem(HS_OUT, JSON.stringify({ v:1, at:Date.now(), hid:h.id, lk:p.lk, pid:p.id, mrn:p.mrn || '', name:p.name || '', age:p.age || '', bed:p.bed || '', by:ME.name || '', email:ME.email || '' }));
+    if(ME.email) localStorage.setItem('hstc.lastEmail', ME.email);
+  } catch(e){ toast('Trình duyệt đang chặn bộ nhớ: không chuyển được thông tin sang công cụ HSTC'); return; }
+  let w = null; try { w = window.open('', 'icusuite'); } catch(e){}
+  if(!w){ location.href = HSTC_URL(); return; }   /* trình duyệt chặn mở tab mới: mở ngay tại tab này */
+  let blank = true; try { blank = !w.location.href || w.location.href === 'about:blank'; } catch(e){}
+  if(blank) w.location.href = HSTC_URL(); else w.focus();   /* tab công cụ HSTC đang mở: nó tự nhận thông tin mới */
+  if(miss.length) toast('Phiếu chưa ghi ' + miss.join(', ') + ': nhập nốt bên công cụ HSTC');
+}
+function hstcList(p){ return Object.entries((p && p.hstc) || {}).map(([k, x]) => Object.assign({ k }, x)).sort((a, b) => String(b.stamp || '').localeCompare(String(a.stamp || ''))); }
+function hstcWhen(x){ const m = String(x.stamp || '').match(/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/); return m ? `${m[4]}:${m[5]} ${m[3]}/${m[2]}` : (x.when || ''); }
+function hstcBox(p, i){
+  const L = hstcList(p), at = Object.entries(p.hstcAt || {}).filter(([f]) => HSTC_FIELD[f]).sort((a, b) => String(b[1]).localeCompare(String(a[1])));
+  const rows = L.map(x => `<div class="hx-r"><b>${esc(x.scale || x.code)}</b><span class="v">${esc(x.tag)}</span><span class="bd">${esc(x.band || '')}</span>${LOCK ? '<span></span>' : `<button type="button" class="btn sm ghost del" data-act="rmHstc" data-i="${i}" data-k="${esc(x.k)}" title="Bỏ khỏi phiếu (bản ghi bên công cụ HSTC vẫn giữ)" aria-label="Bỏ ${esc(x.scale || x.code)}">✕</button>`}<small>Chấm lúc ${esc(hstcWhen(x))}${x.by ? ' · ' + esc(x.by) : ''}</small></div>`).join('');
+  return `<div class="hx">${rows || `<div class="hx-e">Chưa có. Bấm “📊 Chấm điểm HSTC” ở đầu thẻ: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse tự điền vào các ô phía trên; thang điểm khác (NEWS2, SOFA, NRS-2002, VIP…) hiện ở đây.</div>`}</div>`
+    + (at.length ? `<div class="hx-auto">↻ Tự điền từ công cụ HSTC: ${at.map(([f, s]) => `${HSTC_FIELD[f]} lúc ${esc(hstcWhen({ stamp:s }))}`).join(' · ')}</div>` : '');
+}
+/* tìm BN đích: đúng phiếu & BN đã mở công cụ; phiếu đó đã ký khóa hoặc không còn thì sang phiếu ĐD mới nhất chưa khóa có cùng BN */
+function hstcTarget(x){
+  const mk = v => String(v || '').toUpperCase().replace(/\s+/g, '');
+  const same = q => (x.lk && q.lk === x.lk) || q.id === x.pid || (mk(x.mrn) && mk(q.mrn) === mk(x.mrn));
+  const h0 = DB.handovers.find(h => h.id === x.hid && h.part === 'dd');
+  if(h0 && !isLocked(h0)){ const p = h0.patients.find(same); if(p) return [h0, p]; }
+  const hs = DB.handovers.filter(h => h.part === 'dd' && !isLocked(h)).sort((a, b) => b.date.localeCompare(a.date) || (b.updated || 0) - (a.updated || 0));
+  for(const h of hs){ const p = h.patients.find(same); if(p) return [h, p]; }
+  return null;
+}
+function hstcApply(h, p, x){
+  const st = x.stamp || new Date(x.sent).toISOString(), at = p.hstcAt || (p.hstcAt = {});
+  const m = HSTC_MAP[x.id] && HSTC_MAP[x.id](x);
+  if(m){
+    const [f, v] = m; if(at[f] && at[f] > st) return false;   /* đã có lần chấm mới hơn */
+    (p.b = p.b || {})[f] = v; at[f] = st;
+  } else {
+    const H = p.hstc || (p.hstc = {}), o = H[x.id];
+    if(o && o.stamp && o.stamp > st) return false;
+    H[x.id] = { scale:x.scale || '', code:x.code || '', tag:x.tag || '', band:x.band || '', stamp:st, by:x.by || '' };
+  }
+  h.updated = Date.now(); return true;
+}
+function hstcPull(){
+  if(!Sync.ready) return;
+  let Q = []; try { Q = JSON.parse(localStorage.getItem(HS_IN) || '[]'); } catch(e){ return; }
+  if(!Array.isArray(Q) || !Q.length) return;
+  const keep = [], done = [];
+  Q.forEach(x => {
+    if(!x || !x.id) return;
+    const t = hstcTarget(x);
+    if(!t){ if(Date.now() - (x.sent || 0) < 3 * 864e5) keep.push(x); return; }   /* phiếu chưa tải về máy: giữ lại tối đa 3 ngày */
+    if(hstcApply(t[0], t[1], x)) done.push([t[1], x]);
+  });
+  try { keep.length ? localStorage.setItem(HS_IN, JSON.stringify(keep)) : localStorage.removeItem(HS_IN); } catch(e){}
+  if(!done.length) return;
+  save();
+  const [p, x] = done[done.length - 1];
+  toast(done.length === 1 ? `Đã nhận ${x.code || x.scale} ${x.tag} từ công cụ HSTC · ${p.bed ? 'Giường ' + p.bed : p.name || 'BN'}` : `Đã nhận ${done.length} kết quả chấm điểm từ công cụ HSTC`);
+  if(view === 'edit') refreshView();
+}
+window.addEventListener('storage', e => { if(e.key === HS_IN && e.newValue) hstcPull(); });
+window.addEventListener('focus', () => hstcPull());
+
 /* "08/10/2026 22:30" — ngày đặt kèm giờ (nếu có) */
 const whenText = (date, time) => date ? fmtD(date) + (filled(time) ? ' ' + time : '') : '';
 function getP(o, path){ return path.split('.').reduce((a,k)=> a == null ? undefined : a[k], o); }
@@ -1706,8 +1813,9 @@ function openMembers(){
   if(!ME.admin) return;
   const w = document.createElement('div'); w.className = 'mod';
   w.innerHTML = `<div class="box" style="max-width:520px"><div class="row"><b style="font-size:16px">Thành viên được dùng công cụ</b><span style="flex:1"></span><button class="btn sm" data-mx>Đóng</button></div>
-    <p class="hint" style="margin:6px 0 0">Thêm email (gõ tên trước .bv là đủ, công cụ tự thêm .bv@ctump.edu.vn): công cụ tạo luôn tài khoản với mật khẩu ban đầu <b>${esc(Cloud.members.defaultPw)}</b>. Báo người đó đăng nhập và đổi sang mật khẩu riêng. Gỡ khỏi danh sách thì người đó không vào được nữa. Quản trị (${esc(Cloud.members.admins.join(', '))}) luôn có quyền.</p>
+    <p class="hint" style="margin:6px 0 0">Thêm email (gõ tên trước .bv là đủ, công cụ tự thêm .bv@ctump.edu.vn): công cụ tạo luôn tài khoản với mật khẩu ban đầu <b>${esc(Cloud.members.defaultPw)}</b> và thêm luôn vào Công cụ tính điểm HSTC (dùng chung tài khoản). Báo người đó đăng nhập và đổi sang mật khẩu riêng. Gỡ khỏi danh sách thì người đó không vào được nữa. Quản trị (${esc(Cloud.members.admins.join(', '))}) luôn có quyền.</p>
     <form class="memf"><input type="text" name="em" inputmode="email" autocapitalize="none" spellcheck="false" placeholder="tenban (tự thêm .bv@ctump.edu.vn)" required aria-label="Email"><input name="nm" placeholder="Họ tên (không bắt buộc)" aria-label="Họ tên"><button class="btn pri" type="submit">+ Thêm</button></form>
+    <div class="row" style="gap:6px;margin:0 0 8px"><button type="button" class="btn sm" data-hsync title="Thêm mọi thành viên ở đây vào danh sách thành viên Công cụ tính điểm HSTC, để dùng chung tài khoản">↔ Đồng bộ thành viên sang Công cụ tính điểm HSTC</button></div>
     <div class="hint" data-mm style="margin:0 0 6px">Đang tải…</div><div class="meml" data-ml></div></div>`;
   document.body.appendChild(w);
   const load = async () => {
@@ -1720,6 +1828,11 @@ function openMembers(){
   };
   w.addEventListener('click', async e => {
     if(e.target === w || e.target.closest('[data-mx]')){ w.remove(); return; }
+    const hs = e.target.closest('[data-hsync]');
+    if(hs){ hs.disabled = true; hs.textContent = 'Đang đồng bộ…';
+      try { const r = await Cloud.members.syncHstc(); toast(r.fail ? hstcWhy(r.why) : `Công cụ HSTC: thêm mới ${r.added} · đã có sẵn ${r.exists} thành viên`); }
+      catch(x){ toast(cloudErr(x)); }
+      hs.disabled = false; hs.textContent = '↔ Đồng bộ thành viên sang Công cụ tính điểm HSTC'; return; }
     const rm = e.target.closest('[data-rm]');
     if(rm && await ask(`Gỡ ${rm.dataset.rm} khỏi danh sách? Người này sẽ không vào được công cụ nữa (dữ liệu đã nhập vẫn giữ).`, 'Gỡ')){
       try { await Cloud.members.remove(rm.dataset.rm); load(); } catch(x){ toast(cloudErr(x)); }
@@ -1732,14 +1845,17 @@ function openMembers(){
     try {
       const r = await Cloud.members.add(em, f.nm.value.trim()); f.reset(); load();
       const m = w.querySelector('[data-mm]');
-      if(r.created) toast(`Đã tạo tài khoản ${r.email} · mật khẩu ban đầu ${Cloud.members.defaultPw}`);
-      else toast(`${r.email} đã có tài khoản từ trước: người này dùng mật khẩu cũ, hoặc bấm “Quên mật khẩu” ở màn hình đăng nhập`);
+      const hn = r.hstc === 'added' || r.hstc === 'exists' ? ' · dùng được cả Công cụ tính điểm HSTC' : r.hstc ? ' · ' + hstcWhy(r.hstc) : '';
+      if(r.created) toast(`Đã tạo tài khoản ${r.email} · mật khẩu ban đầu ${Cloud.members.defaultPw}${hn}`);
+      else toast(`${r.email} đã có tài khoản từ trước: người này dùng mật khẩu cũ, hoặc bấm “Quên mật khẩu” ở màn hình đăng nhập${hn}`);
     } catch(x){ toast(cloudErr(x)); }
     btn.disabled = false;
   });
   load();
 }
 
+/* lý do chưa thêm được sang Công cụ tính điểm HSTC */
+function hstcWhy(c){ return c === 'nologin' ? 'chưa thêm sang Công cụ HSTC: đăng xuất rồi đăng nhập lại công cụ này để nối phiên quản trị' : c === 'denied' ? 'chưa thêm sang Công cụ HSTC: tài khoản này không phải quản trị bên đó' : 'chưa thêm sang Công cụ HSTC (lỗi mạng?)'; }
 /* ---- Đổi mật khẩu ---- */
 function openChangePw(nudge){
   const dp = Cloud.members.defaultPw;
@@ -1762,7 +1878,7 @@ function openChangePw(nudge){
     if(n !== f.n2.value) return say('Hai lần nhập mật khẩu mới không khớp.');
     if(n === dp) return say(`Hãy chọn mật khẩu khác ${dp}.`);
     const b = f.querySelector('[type=submit]'); b.disabled = true; say('Đang đổi…');
-    try { await Cloud.changePassword(o, n); ME.defaultPw = false; w.remove(); toast('Đã đổi mật khẩu'); }
+    try { const both = await Cloud.changePassword(o, n); ME.defaultPw = false; w.remove(); toast(both ? 'Đã đổi mật khẩu (đổi luôn bên Công cụ tính điểm HSTC)' : 'Đã đổi mật khẩu. Công cụ tính điểm HSTC vẫn dùng mật khẩu cũ: đổi riêng bên đó nếu cần'); }
     catch(x){ say(x && /invalid-credential|wrong-password/.test(x.code || '') ? 'Mật khẩu hiện tại không đúng.' : cloudErr(x)); b.disabled = false; }
   });
   setTimeout(() => { const i = w.querySelector('input'); if(i) i.focus(); }, 50);
@@ -1875,7 +1991,7 @@ function headInner(p, h){
 }
 function pcWrap(p, i, h, body){
   return `<div class="pc ${p.open?'open':''} lv-${p.level||'none'}" id="pc-${p.id}">
-    <div class="pc-top"><div class="pc-h" data-act="toggle" data-i="${i}" id="h-${p.id}">${headInner(p,h)}</div>${LOCK ? '' : `<button class="rm" data-act="rmP" data-i="${i}" title="Cho BN ra khỏi phiếu: chuyển khoa/viện, ra viện, tử vong hoặc xóa nhầm" aria-label="Cho BN ra khỏi phiếu">✕</button>`}</div>
+    <div class="pc-top"><div class="pc-h" data-act="toggle" data-i="${i}" id="h-${p.id}">${headInner(p,h)}</div>${h.part === 'dd' ? `<button type="button" class="hstc-go" data-act="hstc" data-i="${i}" title="Mở Công cụ tính điểm HSTC với thông tin người bệnh này; điểm lưu xong tự gửi về phiếu">📊<span class="t">Chấm điểm HSTC</span></button>` : ''}${LOCK ? '' : `<button class="rm" data-act="rmP" data-i="${i}" title="Cho BN ra khỏi phiếu: chuyển khoa/viện, ra viện, tử vong hoặc xóa nhầm" aria-label="Cho BN ra khỏi phiếu">✕</button>`}</div>
     ${p.open ? `<div class="pc-b">${body}
       <div class="pc-f">${LOCK ? '' : `<span class="row" style="gap:6px"><button class="btn sm dan" data-act="rmP" data-i="${i}">✕ Cho BN ra khỏi phiếu</button><button class="btn sm" data-act="pullOne" data-i="${i}" title="Tìm BN này (theo mã bệnh án) ở phiếu cũ gần nhất và chép thông tin sang">⟲ Lấy thông tin cũ của BN này</button></span>`}<button class="btn sm" data-act="toggle" data-i="${i}">Thu gọn ▲</button></div>
     </div>` : ''}
@@ -1977,7 +2093,9 @@ function pcDD(p, i, h){
     <div class="grid g4">${fld('GCS', P+'b.gcs', b.gcs, {num:1})}${fld('RASS', P+'b.rass', b.rass)}${fld('VAS / CPOT', P+'b.pain', b.pain)}<div class="f"><span>CAM-ICU</span>${seg(P+'b.cam', b.cam, [['pos','(+)'],['neg','(−)']])}</div></div>
     <div class="sub">Nguy cơ</div>
     <div class="grid g4">${fld('Braden', P+'b.braden', b.braden, {num:1, calc:calc('braden', P+'b.braden')})}${fld('Morse', P+'b.morse', b.morse, {num:1, calc:calc('morse', P+'b.morse')})}</div>
-    <div class="row">${chk('Cố định BN', P+'b.restraint', b.restraint)}${chk('Cách ly', P+'b.iso', b.iso, {rr:1})}${b.iso ? `<div style="flex:1;min-width:160px">${inp(P+'b.isoText', b.isoText, {ph:'Loại cách ly / tác nhân'})}</div>` : ''}</div>`);
+    <div class="row">${chk('Cố định BN', P+'b.restraint', b.restraint)}${chk('Cách ly', P+'b.iso', b.iso, {rr:1})}${b.iso ? `<div style="flex:1;min-width:160px">${inp(P+'b.isoText', b.isoText, {ph:'Loại cách ly / tác nhân'})}</div>` : ''}</div>
+    <div class="sub">Các thang điểm khác đã chấm trong công cụ HSTC</div>
+    ${hstcBox(p, i)}`);
   body += sbar('A', 'ĐÁNH GIÁ', `
     <div class="sub">Sơ đồ cơ thể · chọn ký hiệu rồi chạm lên hình</div>
     ${bodyMap(p, i)}
@@ -2329,6 +2447,8 @@ document.addEventListener('click', e => {
     delMark(){ cur.patients[+b.dataset.i].marks.splice(+b.dataset.j, 1); touched(); rerender(); },
     addSed(){ const L = ensureSed(cur.patients[+b.dataset.i]); if(L.length < 3){ L.push({ id:uid(), name:'', rate:'' }); touched(); rerender(); } },
     rmSed(){ const L = ensureSed(cur.patients[+b.dataset.i]); L.splice(+b.dataset.j, 1); touched(); rerender(); },
+    hstc(){ hstcOpen(cur, cur.patients[+b.dataset.i]); },
+    rmHstc(){ const p = cur.patients[+b.dataset.i]; if(p && p.hstc){ delete p.hstc[b.dataset.k]; touched(); rerender(); } },
     addDrain(){ const D = ensureDrains(cur.patients[+b.dataset.i]); D.push({ id:uid() }); touched(); rerender(); toast('Đã thêm ' + drainLabel(D, D.length - 1).toLowerCase()); },
     async rmDrain(){
       const D = ensureDrains(cur.patients[+b.dataset.i]), j = +b.dataset.j, t = D[j] || {};
@@ -2498,7 +2618,7 @@ function ppDD(p, h){
   const s = p.s||{}, b = p.b||{}, m = p.meds||{}, nu = p.nutr||{}, xn = p.bundle||{}, bc = p.bedc||{}, r = p.r||{}, fl = p.fluid||{};
   let o = `<div class="pp lv-${p.level||'none'}">${ppHead(p, h)}<div class="pl1">Chẩn đoán: ${pv(p.dx)}${p.prevR ? `<br><span class="k">Kíp trước dặn:</span> ${esc(p.prevR)}` : ''}</div>`;
   o += `<div class="pr"><div class="lt S">S</div><div class="tx"><span class="k">DHST bất thường / cảnh báo sớm:</span> ${pv(s.vitals)}<br><span class="k">Biến cố và xử trí:</span> ${pv(s.event)}</div></div>`;
-  o += `<div class="pr"><div class="lt B">B</div><div class="tx">GCS ${pv(b.gcs)} · RASS ${pv(b.rass)} · VAS/CPOT ${pv(b.pain)} · CAM-ICU ${b.cam==='pos'?'(+)':b.cam==='neg'?'(−)':'……'}<br>Braden ${pv(b.braden)} · Morse ${pv(b.morse)} · ${box(b.restraint,'Cố định BN')} · ${box(b.iso,'Cách ly')}${b.isoText?': '+esc(b.isoText):''}</div></div>`;
+  o += `<div class="pr"><div class="lt B">B</div><div class="tx">GCS ${pv(b.gcs)} · RASS ${pv(b.rass)} · VAS/CPOT ${pv(b.pain)} · CAM-ICU ${b.cam==='pos'?'(+)':b.cam==='neg'?'(−)':'……'}<br>Braden ${pv(b.braden)} · Morse ${pv(b.morse)} · ${box(b.restraint,'Cố định BN')} · ${box(b.iso,'Cách ly')}${b.isoText?': '+esc(b.isoText):''}${hstcList(p).length ? `<br><span class="k">Thang điểm khác (công cụ HSTC):</span> ${hstcList(p).map(x => `${esc(x.code || x.scale)} ${esc(x.tag)}${x.band ? ' – ' + esc(x.band) : ''} (${esc(hstcWhen(x))})`).join('; ')}` : ''}</div></div>`;
   const tRow = (l, t, key) => { t = t || {}; const d = dwellDays(t.date, t.time, h.date), st = [filled(t.out) ? 'ra ' + esc(t.out) + ' ml' : '', esc(t.status || '')].filter(Boolean).join(' · ');
     return `<tr><td>${l}</td><td>${esc(t.site)}</td><td>${t.date ? esc(whenText(t.date, t.time)) + (d ? ` (${key && d >= dueOf(key) ? '<b>' + dwellTag(d, dueOf(key)) + '</b>' : dwellTag(d)})` : '') : ''}</td><td>${st}</td></tr>`; };
   const D = ensureDrains(p), Df = D.filter((t, j) => j === 0 || [t.site, t.date, t.status, t.out].some(filled)), dS = drainSum(p);
@@ -2534,9 +2654,9 @@ if(/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacI
    ========================================================= */
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-         sendPasswordResetEmail, updateProfile, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword }
+         sendPasswordResetEmail, updateProfile, signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword, deleteUser }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+import { initializeFirestore, getFirestore, persistentLocalCache, persistentMultipleTabManager,
          collection, doc, setDoc, deleteDoc, getDoc, getDocs, query, where, onSnapshot, deleteField, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -2586,6 +2706,45 @@ catch(e){ db = initializeFirestore(fb, {}); }
 const COL = { h:"handovers", d:"daily" };
 const coll = k => collection(db, COL[k]);
 
+/* ---------- đăng nhập dùng chung với Công cụ tính điểm HSTC (icusuite) ----------
+   Đăng nhập công cụ này xong thì đăng nhập luôn vào dự án icusuite (cùng email, cùng mật khẩu) dưới tên
+   ứng dụng "bg-sso"; trang icusuite (cùng địa chỉ gốc) thấy phiên này và tự vào, không phải gõ lại.
+   Mật khẩu không được lưu ở đâu cả. Hai bên khác mật khẩu thì icusuite vẫn hỏi đăng nhập như thường. */
+const HCFG = window.BG_HSTC_CONFIG, HADMINS = (window.BG_HSTC_ADMINS || []).map(e => e.toLowerCase());
+let hApp = null, hAuth = null, hDb = null;
+const hstcAuth = () => { if(!HCFG) return null; if(!hApp){ hApp = initializeApp(HCFG, "bg-sso"); hAuth = getAuth(hApp); } return hAuth; };
+const hstcDb = () => { if(!hstcAuth()) return null; if(!hDb) hDb = getFirestore(hApp); return hDb; };
+async function hstcSSO(em, pw){
+  const a = hstcAuth(); if(!a) return;
+  try { await signInWithEmailAndPassword(a, em, pw); return; }
+  catch(e){
+    /* chưa từng vào icusuite: tạo tài khoản bằng mật khẩu ban đầu (như icusuite tự làm ở lần đăng nhập đầu) */
+    if(pw !== DEFAULT_PW || !/invalid-credential|user-not-found|invalid-login/.test(e.code || "")){ console.warn("HSTC: không đăng nhập dùng chung được", e.code); return; }
+  }
+  try {
+    const c = await createUserWithEmailAndPassword(a, em, DEFAULT_PW);
+    const ok = HADMINS.includes(em) || await getDoc(doc(hstcDb(), "members", em)).then(x => x.exists(), () => false);
+    if(!ok) await deleteUser(c.user).catch(() => signOut(a));   /* chưa là thành viên icusuite: không để lại tài khoản rác */
+  } catch(e2){ console.warn("HSTC: không tạo được tài khoản", e2.code); }
+}
+/* thêm một email vào danh sách thành viên icusuite (cần phiên quản trị icusuite: admin vừa đăng nhập công cụ này) */
+async function hstcAddMember(email, name){
+  const a = hstcAuth(); if(!a) return "nocfg";
+  await a.authStateReady();
+  if(!a.currentUser) return "nologin";
+  try {
+    const ref = doc(hstcDb(), "members", email), x = await getDoc(ref);
+    if(x.exists()) return "exists";
+    await setDoc(ref, { name:name || "", addedBy:a.currentUser.email.toLowerCase(), addedAt:serverTimestamp() });
+    return "added";
+  } catch(e){ console.warn("HSTC: không thêm được thành viên", e); return e && e.code === "permission-denied" ? "denied" : "error"; }
+}
+function bgSignOut(){
+  try { localStorage.setItem("bg.signout", JSON.stringify({ at:Date.now(), email:((auth.currentUser && auth.currentUser.email) || "").toLowerCase() })); } catch(e){}
+  const a = hstcAuth(); if(a) signOut(a).catch(() => {});
+  return signOut(auth);
+}
+
 /* ---------- chuyển dữ liệu ---------- */
 const DEL = "__XOA__";
 function toFs(v){
@@ -2620,17 +2779,30 @@ window.Cloud = {
       } catch(e){ if(e.code !== "auth/email-already-in-use") throw e; }
       finally { try { await signOut(a2); } catch(x){} try { await deleteApp(app2); } catch(x){} }
       await setDoc(doc(db, "members", email), { name:name || "", addedBy:(auth.currentUser.email || "").toLowerCase(), addedAt:serverTimestamp() });
-      return { email, created };
+      return { email, created, hstc:await hstcAddMember(email, name) };
+    },
+    /* thêm mọi thành viên của công cụ này vào danh sách thành viên Công cụ tính điểm HSTC (ai đã có thì bỏ qua) */
+    async syncHstc(){
+      const s = await getDocs(collection(db, "members")), out = { added:0, exists:0, fail:0, why:"" };
+      for(const d of s.docs){
+        const r = await hstcAddMember(d.id, (d.data() || {}).name || "");
+        if(r === "added") out.added++; else if(r === "exists") out.exists++; else { out.fail++; out.why = r; if(r === "nologin" || r === "nocfg" || r === "denied") break; }
+      }
+      return out;
     },
     normEmail, defaultPw:DEFAULT_PW,
     remove(email){ return deleteDoc(doc(db, "members", email)); },
     admins:ADMINS
   },
-  signOut(){ return signOut(auth); },
+  signOut(){ return bgSignOut(); },
+  /* đổi mật khẩu; đổi luôn bên Công cụ tính điểm HSTC nếu bên đó đang cùng mật khẩu cũ. Trả về true nếu đổi được cả hai */
   async changePassword(oldPw, newPw){
     const u = auth.currentUser;
     await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, oldPw));
     await updatePassword(u, newPw);
+    const a = hstcAuth(); if(!a) return false;
+    try { const c = await signInWithEmailAndPassword(a, u.email, oldPw); await updatePassword(c.user, newPw); return true; }
+    catch(e){ console.warn("HSTC: không đổi được mật khẩu bên công cụ HSTC", e.code); try { await signInWithEmailAndPassword(a, u.email, newPw); return true; } catch(x){ return false; } }
   }
 };
 let usedDefault = false;   /* vừa đăng nhập bằng mật khẩu ban đầu → nhắc đổi */
@@ -2687,7 +2859,7 @@ onAuthStateChanged(auth, u => { msg(""); route(u); });
 /* ---------- các biểu mẫu ---------- */
 try { const em = localStorage.getItem("bg_email"); if(em) $("gEmail").value = em; } catch(e){}
 document.querySelectorAll("#authGate [data-go]").forEach(b => b.onclick = () => { msg(""); pane(b.dataset.go); });
-document.querySelectorAll("[data-signout]").forEach(b => b.onclick = () => signOut(auth));
+document.querySelectorAll("[data-signout]").forEach(b => b.onclick = () => bgSignOut());
 document.querySelectorAll("#authGate [data-eye]").forEach(b => b.onclick = () => { const i = $(b.dataset.eye); i.type = i.type === "password" ? "text" : "password"; b.classList.toggle("on", i.type === "text"); });
 $("gLogin").onsubmit = async e => {
   e.preventDefault(); const f = e.target; msg("");
@@ -2709,6 +2881,8 @@ $("gLogin").onsubmit = async e => {
       } else throw err;
     }
     $("gPass").value = "";
+    hstcSSO(em, pw);   /* chạy nền, không chờ */
+    try { localStorage.setItem("hstc.lastEmail", em); } catch(x){}
     try { $("gRemember").checked ? localStorage.setItem("bg_email", em) : localStorage.removeItem("bg_email"); } catch(x){}
   } catch(err){ msg(errText(err)); }
   busy(f, false);
