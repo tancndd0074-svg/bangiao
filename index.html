@@ -2286,13 +2286,47 @@ function updateDerived(){
 }
 
 /* ================= EVENTS ================= */
-/* trang Số liệu: Enter nhảy sang ô số tiếp theo (Shift+Enter quay lại ô trước); ô cuối thì đóng bàn phím */
+/* Tên người: rời ô thì tự chuẩn hóa, bỏ khoảng trắng thừa.
+   - Họ tên người bệnh trong phiếu bàn giao BS/ĐD: CHỮ IN HOA toàn bộ ("nguyễn văn an" → "NGUYỄN VĂN AN").
+   - Tên BS, ĐD, hộ lý và các danh sách ở trang Số liệu: viết hoa chữ cái đầu mỗi từ ("nguyễn văn  an" → "Nguyễn Văn An");
+     giữ chức danh viết tắt: "bs. trần huy" → "BS. Trần Huy", "đd lan, đd hoa" → "ĐD Lan, ĐD Hoa". */
+const NAME_TITLE = { bs:'BS', 'đd':'ĐD', dd:'ĐD', hl:'HL', cn:'CN', ths:'ThS', ts:'TS', pgs:'PGS', gs:'GS', bsck:'BSCK', bsnt:'BSNT', ktv:'KTV', ys:'YS' };
+const capWord = w => w.split('-').map(x => x.replace(/^([^\p{L}]*)(\p{L})(.*)$/u, (m, a, b, c) => a + b.toLocaleUpperCase('vi') + c.toLocaleLowerCase('vi'))).join('-');
+function nameCase(v){
+  return String(v || '').split(',').map(seg => seg.trim().split(/\s+/).filter(Boolean).map((w, i) => {
+    if(w.includes('.')) return w.split('.').map(x => NAME_TITLE[x.toLocaleLowerCase('vi')] || (x ? capWord(x) : x)).join('.');
+    const t = NAME_TITLE[w.toLocaleLowerCase('vi')];
+    return i === 0 && t ? t : capWord(w);
+  }).join(' ')).filter(Boolean).join(', ');
+}
+const NAME_K = /^(giver|receiver|head|patients\.\d+\.name)$/, PT_NAME_K = /^patients\.\d+\.name$/;
+const upperName = v => String(v || '').replace(/\s+/g, ' ').trim().toLocaleUpperCase('vi');
+const isNameField = el => { const d = el.dataset || {}; return (d.k && NAME_K.test(d.k)) || (d.st && /^(bs|dd|hl)$/.test(d.st)) || (d.sl && /\.name$/.test(d.sl)) || (el.name === 'nm' && !!el.closest('.memf')); };
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if(!el || el.disabled || el.readOnly || !/^(INPUT|TEXTAREA)$/.test(el.tagName) || !isNameField(el)) return;
+  const v = PT_NAME_K.test(el.dataset.k || '') ? upperName(el.value) : nameCase(el.value); if(v === el.value) return;
+  el.value = v; if(el.tagName === 'TEXTAREA') grow(el);
+  el.dispatchEvent(new Event('input', { bubbles:true }));   /* lưu và đồng bộ như khi gõ */
+}, true);
+/* Enter nhảy sang ô TRỐNG tiếp theo trong cùng nhóm ô số (Shift+Enter quay lại ô liền trước); hết ô trống thì đóng bàn phím.
+   Nhóm: (1) số liệu kíp trực, (2) DHST bệnh nhân HSTC ở trang Số liệu, (3) DHST lúc bàn giao của từng BN trong phiếu bác sĩ. */
+const VS_K = /^patients\.(\d+)\.vs\.(bp|hr|spo2|t)$/;
+function enterGroup(el){
+  const d = el.dataset || {};
+  if(d.sk) return 'input[data-sk]';
+  if(d.hv) return 'input[data-hv]';
+  const m = (d.k || '').match(VS_K); if(m) return `[data-k^="patients.${m[1]}.vs."]`;
+  return null;
+}
+document.addEventListener('focusin', e => { const el = e.target; if(el && el.tagName === 'INPUT' && enterGroup(el) && !el.hasAttribute('enterkeyhint')) el.setAttribute('enterkeyhint', 'next'); });
 document.addEventListener('keydown', e => {
   const el = e.target;
-  if(e.key !== 'Enter' || e.isComposing || !el.dataset || !el.dataset.sk) return;
+  if(e.key !== 'Enter' || e.isComposing || !el || el.tagName !== 'INPUT') return;
+  const g = enterGroup(el); if(!g) return;
   e.preventDefault();
-  const all = [...document.querySelectorAll('input[data-sk]')].filter(x => !x.disabled && x.offsetParent), i = all.indexOf(el);
-  const nx = all[i + (e.shiftKey ? -1 : 1)];
+  const all = [...document.querySelectorAll(g)].filter(x => x.tagName === 'INPUT' && !x.disabled && !x.readOnly && x.offsetParent), i = all.indexOf(el);
+  const nx = e.shiftKey ? all[i - 1] : all.slice(i + 1).find(x => !String(x.value).trim());
   if(!nx){ el.blur(); return; }
   nx.focus(); nx.select();
   const r = nx.getBoundingClientRect(), top = 90;   /* chừa chỗ cho thanh tiêu đề dính */
