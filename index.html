@@ -254,6 +254,10 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
 .srcrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px;padding:8px 10px;border-radius:10px;background:var(--pri-soft)}
 .srcrow .lab{font-size:13px;font-weight:600;color:var(--muted)}
 .srcrow textarea{flex:1;min-width:160px}
+.pill.ns{flex-shrink:0;white-space:nowrap}.pill.ns .ts{display:none}
+@media (max-width:520px){.pill.ns .tl{display:none}.pill.ns .ts{display:inline}}
+.srcrow.miss{background:var(--amb-soft);outline:1.5px solid var(--amb)}
+.srcrow .srcw{flex-basis:100%;font-size:12.5px;font-weight:600;color:var(--amb)}
 .mod textarea{flex:1;min-height:300px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:13.5px;z-index:60;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.on{opacity:1}
@@ -1005,7 +1009,8 @@ function autoCounts(h){
     vaso: ps.filter(p => h.part==='bs' ? (p.a && p.a.hemo === 'vaso') : (p.meds && p.meds.vp && VP.some(([k]) => p.meds.vp[k] && p.meds.vp[k].on))).length,
     iso: ps.filter(p => p.b && p.b.iso).length,
     /* nhập mới: chỉ tự đếm khi phiếu được chép từ kíp trước (BN không có nguồn chép = BN mới vào) */
-    new: h.carried ? ps.filter(p => !p.from && !p.old).length : null,
+    /* tính cả BN mới vào rồi rời khoa ngay trong kíp (ra viện, chuyển, tử vong), giống trang Số liệu kíp trực */
+    new: h.carried ? ps.concat((h.out||[]).map(o => o.p)).filter(isNewP).length : null,
     tr: (h.out||[]).filter(o => ['tr','ck','cv'].includes(o.reason)).length,
     dc: (h.out||[]).filter(o => o.reason === 'dc').length,
     trdc: (h.out||[]).filter(o => ['tr','ck','cv','dc'].includes(o.reason)).length,
@@ -1033,7 +1038,7 @@ function carryPatient(p, part, src){
   q.fluid = {}; q.vs = {};   /* cân bằng dịch và DHST tính riêng cho từng kíp */
   if(Array.isArray(q.drains)) q.drains.forEach(d => { delete d.out; });
   if(Array.isArray(q.marks)) q.marks.forEach(mk => { delete mk.vip; });   /* VIP score đánh giá lại mỗi kíp */
-  q.from = { date:src.date, shift:src.shift, part:src.part };
+  q.from = { date:src.date, shift:src.shift, part:src.part }; delete q.pulled;
   if(part === 'bs'){ q.unchanged = false; q.r = { monitor:'', todo:{} }; }
   else { q.bedc = {}; q.r = {}; }
   return q;
@@ -1593,6 +1598,8 @@ function updateStats(){
     const notes = [];
     if(con < 0) notes.push(['bad', 'Hiện còn bị âm: kiểm tra lại Bệnh cũ và số bệnh ra.']);
     if(dept === 'cc' && ni(x.tvng) > ni(x.moi)) notes.push(['warn', `Tử vong ngoại viện (${ni(x.tvng)}) nhiều hơn Bệnh mới (${ni(x.moi)}): BN tử vong ngoại viện cũng phải được tính vào Bệnh mới.`]);
+    if(dept === 'hs'){ const bh = bsOfDay(SD), ms = bh ? [...bh.patients, ...(bh.out || []).map(o => o.p)].filter(p => needSrc(p, bh)) : [];
+      if(ms.length) notes.push(['warn', `Phiếu bác sĩ ${fmtDM(SD)} có ${ms.length} BN nhập mới chưa ghi từ Cấp cứu hay khoa khác (${ms.map(p => p.bed ? 'giường ' + p.bed : (p.name || 'chưa ghi giường')).join(', ')}), nên chưa được đếm vào Bệnh mới. Mở phiếu bác sĩ, chọn “Nhập mới từ” trên thẻ BN đó.`]); }
     if(dept === 'hs' && r && V(SD, 'hs', 'mcc') > ni(sec(SD, 'cc').ck)) notes.push(['warn', `HSTC nhận từ Cấp cứu ${V(SD, 'hs', 'mcc')} BN nhưng Cấp cứu ghi chuyển khoa ${ni(sec(SD, 'cc').ck)} BN.`]);
     else if(dept === 'hs' && r && ni(sec(SD, 'cc').ck)) notes.push(['', `Cấp cứu chuyển khoa ${ni(sec(SD, 'cc').ck)} BN: ${V(SD, 'hs', 'mcc')} vào HSTC, ${ni(sec(SD, 'cc').ck) - V(SD, 'hs', 'mcc')} sang khoa khác.`]);
     $('#snote-' + dept).innerHTML = notes.map(([c, t]) => `<div class="snote ${c}">${esc(t)}</div>`).join('');
@@ -1987,7 +1994,8 @@ function headInner(p, h){
   const sub = [p.mrn ? 'BA ' + p.mrn : '', p.age ? p.age + ' tuổi' : '', d ? 'ngày HSTC thứ ' + d : '', isNewP(p) && p.src ? 'mới từ ' + srcText(p) : '', p.dx].filter(Boolean).join(' · ');
   const lv = p.level ? `<span class="pill ${p.level}${p.level === 'red' ? ' hot' : ''}">${p.level === 'red' ? '▲ ' : ''}${LVS[p.level]}</span>` : '';
   const icon = p.level === 'red' ? '<span class="lvi" aria-hidden="true">⚠</span>' : '';
-  return `<div class="bed">${esc(p.bed) || '?'}</div><div class="who"><b>${icon}${esc(p.name) || '<span style="color:var(--muted);font-weight:500">Bệnh nhân mới</span>'}</b><small>${esc(sub) || '&nbsp;'}</small></div>${lv}${chev}`;
+  const ns = needSrc(p, h) ? '<span class="pill amber ns" title="BN nhập mới chưa chọn từ Cấp cứu hay khoa khác: chưa được đếm vào số liệu kíp trực">⚠ <span class="tl">Chưa ghi nhập từ đâu</span><span class="ts">Nhập từ?</span></span>' : '';
+  return `<div class="bed">${esc(p.bed) || '?'}</div><div class="who"><b>${icon}${esc(p.name) || '<span style="color:var(--muted);font-weight:500">Bệnh nhân mới</span>'}</b><small>${esc(sub) || '&nbsp;'}</small></div>${ns}${lv}${chev}`;
 }
 function pcWrap(p, i, h, body){
   return `<div class="pc ${p.open?'open':''} lv-${p.level||'none'}" id="pc-${p.id}">
@@ -1998,21 +2006,26 @@ function pcWrap(p, i, h, body){
   </div>`;
 }
 function sbar(L, word, body){ return `<div class="sbar"><div class="L ${L}">${L === 'C' ? '✓' : L}<small>${word}</small></div><div class="body">${body}</div></div>`; }
+/* BN nhập mới chưa ghi từ đâu đến: chưa được đếm vào Bệnh mới (Từ Cấp cứu / Khoa đến) của trang số liệu.
+   Ở phiếu chép từ kíp trước, mọi BN không chép sang đều là BN nhập mới; ở phiếu lập lần đầu thì chỉ BN đã chọn nguồn. */
+const needSrc = (p, h) => isNewP(p) && !filled(p.src) && (('src' in p) || !!(h && h.carried));
 /* hàng "Nhập mới từ" trên thẻ BN mới (không hiện với BN chép từ kíp trước) */
-function srcRow(p, P){
-  if(!isNewP(p) || !('src' in p)) return '';
-  return `<div class="srcrow"><span class="lab">Nhập mới từ</span>${seg(P+'src', p.src, SRC)}${p.src === 'kd' ? inp(P+'srcDept', p.srcDept, { ph:'Tên khoa' }) : ''}</div>`;
+function srcRow(p, P, h){
+  if(!isNewP(p) || !(('src' in p) || (h && h.carried))) return '';
+  const miss = !filled(p.src);
+  return `<div class="srcrow${miss ? ' miss' : ''}"><span class="lab">Nhập mới từ</span>${seg(P+'src', p.src, SRC)}${p.src === 'kd' ? inp(P+'srcDept', p.srcDept, { ph:'Tên khoa' }) : ''}${miss ? '<span class="srcw">⚠ Chưa chọn: BN này chưa được đếm vào Bệnh mới của số liệu kíp trực</span>' : ''}</div>`;
 }
 function prevBox(p){
-  if(!p.from && !p.prevR) return '';
-  return `<div class="prev">${p.from ? `<div class="src">↺ Thông tin chép từ phiếu ${esc(fmtD(p.from.date))}. Kiểm tra lại và sửa những gì đã thay đổi.</div>` : ''}${p.prevR ? `<b>Kíp trước dặn:</b> ${esc(p.prevR)}` : ''}</div>`;
+  const fr = p.from || p.pulled;
+  if(!fr && !p.prevR) return '';
+  return `<div class="prev">${fr ? `<div class="src">↺ Thông tin chép từ phiếu ${esc(fmtD(fr.date))}. Kiểm tra lại và sửa những gì đã thay đổi.</div>` : ''}${p.prevR ? `<b>Kíp trước dặn:</b> ${esc(p.prevR)}` : ''}</div>`;
 }
 
 /* ---------- BS patient card ---------- */
 function pcBS(p, i, h){
   const P = `patients.${i}.`, a = p.a || {}, b = p.b || {}, r = p.r || {todo:{}}, s = p.s || {}, f = p.focus || {}, v = p.vs || {};
   const lvl = p.level === 'red' || p.level === 'amber';
-  let body = prevBox(p) + srcRow(p, P) + `
+  let body = prevBox(p) + srcRow(p, P, h) + `
   <div class="grid g4" style="margin-top:12px">
     ${fld('Giường', P+'bed', p.bed)}
     ${fld('Mã bệnh án', P+'mrn', p.mrn)}
@@ -2074,7 +2087,7 @@ function pcBS(p, i, h){
 function pcDD(p, i, h){
   const P = `patients.${i}.`, s = p.s||{}, b = p.b||{}, f = p.focus||{}, m = p.meds||{}, nu = p.nutr||{}, xn = p.bundle||{}, bc = p.bedc||{}, r = p.r||{};
   const lvl = p.level === 'red' || p.level === 'amber';
-  let body = prevBox(p) + srcRow(p, P) + `
+  let body = prevBox(p) + srcRow(p, P, h) + `
   <div class="grid g4" style="margin-top:12px">
     ${fld('Giường', P+'bed', p.bed)}
     ${fld('Mã bệnh án', P+'mrn', p.mrn)}
@@ -2369,7 +2382,8 @@ document.addEventListener('click', e => {
     touched(); rerender(); return;
   }
   const sb = e.target.closest('[data-seg]');
-  if(sb && cur){ const k = sb.dataset.seg, v = sb.dataset.v, nv = getP(cur, k) === v ? '' : v; setP(cur, k, nv);
+  /* bấm lại nút đang chọn thì bỏ chọn; riêng "Nhập mới từ" thì không (bỏ chọn nhầm làm BN mới không được đếm vào Bệnh mới) */
+  if(sb && cur){ const k = sb.dataset.seg, v = sb.dataset.v, nv = getP(cur, k) === v && !/\.src$/.test(k) ? '' : v; setP(cur, k, nv);
     const lm = k.match(/^patients\.(\d+)\.(level|src)$/); if(lm) pushShared(cur, +lm[1], lm[2], nv);
     touched(); rerender(); return; }
   const b = e.target.closest('[data-act]'); if(!b) return;
@@ -2430,7 +2444,10 @@ document.addEventListener('click', e => {
       for(const x of earlierOf(cur)){ q = x.patients.find(y => samePatient(p, y)); if(q){ src = x; break; } }
       if(!q){ toast('Không tìm thấy BN này ở các phiếu cũ' + (p.mrn ? '' : ' (nên ghi mã bệnh án)')); return; }
       if(!await ask(`Chép thông tin BN ${q.name||''}${q.mrn ? ' (BA ' + q.mrn + ')' : ''} từ phiếu ${srcLabel(src)} vào phiếu này? Nội dung đang ghi của BN này sẽ được thay thế; mục S và R để trống cho kíp này ghi.`, 'Chép sang')) return;
-      const n = carryPatient(q, cur.part, src); n.open = true; n.lk = p.lk || n.lk; cur.patients[i] = n;
+      const n = carryPatient(q, cur.part, src); n.open = true; n.lk = p.lk || n.lk;
+      /* BN nhập mới trong kíp này (vd vào lại HSTC) chỉ lấy thông tin cũ: vẫn là BN nhập mới, giữ nguồn nhập */
+      if(isNewP(p) && (filled(p.src) || cur.carried)){ n.pulled = n.from; delete n.from; delete n.old; n.src = p.src || ''; if(filled(p.srcDept)) n.srcDept = p.srcDept; else delete n.srcDept; }
+      cur.patients[i] = n;
       linkRoster(cur); touched(); rerender();
     },
     open(){ openH(b.dataset.id); },
@@ -2475,7 +2492,10 @@ document.addEventListener('click', e => {
     closeAll(){ cur.patients.forEach(p => p.open = false); touched(); rerender(); },
     roster(){ const other = cur.part === 'bs' ? 'dd' : 'bs'; const src = DB.handovers.filter(x => x.part === other).sort((a,b) => (b.date||'').localeCompare(a.date||'') || b.updated - a.updated)[0];
       if(!src || !src.patients.length){ toast('Chưa có phiếu ' + partName(other) + ' nào trên máy này'); return; }
-      cur.patients = src.patients.map(q => { const p = newPatient(cur.part); Object.assign(p, { lk:q.lk||p.lk, bed:q.bed, mrn:q.mrn||'', name:q.name, age:q.age, admit:q.admit, dx:q.dx, level:q.level, open:false }); if(cur.part==='bs' && q.weight) p.weight = q.weight; return p; });
+      cur.patients = src.patients.map(q => { const p = newPatient(cur.part); Object.assign(p, { lk:q.lk||p.lk, bed:q.bed, mrn:q.mrn||'', name:q.name, age:q.age, admit:q.admit, dx:q.dx, level:q.level, open:false }); if(cur.part==='bs' && q.weight) p.weight = q.weight;
+        /* giữ trạng thái nhập mới: cùng kíp thì lấy nguồn nhập của phiếu kia; phiếu kíp khác thì đều là BN cũ */
+        if(src.date !== cur.date || !isNewP(q)) p.old = true; else if(filled(q.src)){ p.src = q.src; if(filled(q.srcDept)) p.srcDept = q.srcDept; }
+        return p; });
       touched(); rerender(); toast(`Đã lấy ${cur.patients.length} BN từ phiếu ${partName(other)} ${fmtD(src.date)}`); },
     tool(){ mapTool[b.dataset.pid] = b.dataset.v; rerender(); },
     delMark(){ cur.patients[+b.dataset.i].marks.splice(+b.dataset.j, 1); touched(); rerender(); },
