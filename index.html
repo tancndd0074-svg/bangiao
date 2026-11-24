@@ -264,6 +264,7 @@ table.at td{border-bottom:1px solid var(--line);padding:7px 6px;vertical-align:t
 .lvt{display:flex;gap:10px}.lvt .f{flex:1}
 .lvk{margin:0;font-size:13px;font-weight:600;color:var(--pri)}.lvk.warn{color:var(--amb)}.lvk.bad{color:var(--red)}
 .au-btn{position:fixed;right:12px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:35;border:0;border-radius:99px;padding:9px 15px;font:inherit;font-size:13.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer}
+.au-btn.ok{background:var(--grn-soft);color:var(--grn);border:1px solid var(--grn);padding:6px 12px;font-size:12.5px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .au-btn.bad{background:var(--red);color:#fff}.au-btn.warn{background:var(--amb);color:#fff}.au-btn.info{background:var(--card);color:var(--muted);border:1px solid var(--line)}
 .au-panel{position:fixed;right:10px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:36;width:min(390px,calc(100vw - 20px));max-height:min(70vh,640px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden}
 .au-h{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--pri-soft)}
@@ -2617,7 +2618,8 @@ function renderAudit(){
   const open = L.length > 0 && (AU.open == null ? auDock() && n > 0 : AU.open);
   document.body.classList.toggle('au-dock', open && auDock());
   const ic = { bad:'!', warn:'!', info:'i' };
-  const html = (L.length && !open ? `<button type="button" class="au-btn ${nb ? 'bad' : n ? 'warn' : 'info'}" data-act="auToggle" aria-expanded="false">${n ? `⚠ ${n} lỗi cần sửa` : `ⓘ ${L.length} nhắc nhở`}</button>` : '')
+  const html = (!L.length ? `<button type="button" class="au-btn ok" data-act="auClean" title="Công cụ đã tự kiểm tra ${view === 'edit' ? 'phiếu này' : 'số liệu kíp này'}: chưa thấy lỗi khi cho BN vào / ra khoa">✓ Không có lỗi</button>` : '')
+    + (L.length && !open ? `<button type="button" class="au-btn ${nb ? 'bad' : n ? 'warn' : 'info'}" data-act="auToggle" aria-expanded="false">${n ? `⚠ ${n} lỗi cần sửa` : `ⓘ ${L.length} nhắc nhở`}</button>` : '')
     + (open ? `<aside class="au-panel" aria-label="Nhắc lỗi trong kíp"><div class="au-h"><div><b>Nhắc lỗi trong kíp${n ? ` · ${n}` : ''}</b><small>${view === 'edit' ? `Phiếu ${partName(cur.part)} ${fmtDM(cur.date)}` : `Số liệu kíp ${fmtDM(SD)}`} · công cụ tự kiểm tra, sửa ngay trong kíp</small></div><button type="button" class="au-x" data-act="auToggle" aria-label="Thu khung nhắc lỗi">✕</button></div>
       <div class="au-list">${L.map((x, i) => `<div class="au-m ${x.lv}"><span class="au-i" aria-hidden="true">${ic[x.lv]}</span><div class="au-b"><b>${esc(x.title)}</b><p>${esc(x.text)}${x.h && isLocked(x.h) && x.lv !== 'info' ? ' Phiếu đã ký khóa: mở khóa để sửa.' : ''}</p>${x.acts.length ? `<div class="au-a">${x.acts.map(([l], j) => `<button type="button" class="btn sm${j ? '' : ' pri'}" data-act="auDo" data-a="${i}.${j}">${esc(l)}</button>`).join('')}</div>` : ''}</div></div>`).join('')}</div></aside>` : '');
   if(!w){ w = document.createElement('div'); w.id = 'auWrap'; app.appendChild(w); AU.html = ''; }
@@ -2765,6 +2767,7 @@ document.addEventListener('click', e => {
       cur.patients.forEach(p => p.open = false); const p = Object.assign(newPatient(cur.part), r); cur.patients.push(p); linkRoster(cur); touched(); rerender(); setTimeout(()=>{ const el = document.getElementById('pc-'+p.id); el?.scrollIntoView({behavior:'smooth', block:'start'}); const ae = document.activeElement; if(!ae || ae === document.body || ae.dataset.act === 'addP') el?.querySelector('input')?.focus({preventScroll:true}); }, 50); },
     rmP(){ return rmPatient(+b.dataset.i); },
     auToggle(){ AU.open = !document.querySelector('.au-panel'); renderAudit(); },
+    auClean(){ toast(`Đã kiểm tra ${view === 'edit' ? 'phiếu này' : 'số liệu kíp này'}: chưa thấy lỗi khi cho BN vào / ra khoa`); },
     auDo(){ const [i, j] = b.dataset.a.split('.').map(Number), x = AU.list[i]; if(x && x.acts[j]) x.acts[j][1](); },
     async inTime(){ const h0 = cur, i = +b.dataset.i, p = cur.patients[i]; if(!p || LOCK) return;
       const who = `${p.bed ? 'Giường ' + padBed(p.bed) : 'Bệnh nhân'}${p.name ? ' – ' + p.name : ''}`;
