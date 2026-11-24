@@ -2958,6 +2958,9 @@ function ppBS(p, h){
     <div class="pl1">Chẩn đoán: ${pv(p.dx)} · Dị ứng: ${p.allergy==='yes' ? 'Có: ' + pv(p.allergyText) : p.allergy==='no' ? 'Không' : '……'}${p.prevR ? `<br><span class="k">Kíp trước dặn:</span> ${esc(p.prevR)}` : ''}</div>
     <div class="pl1"><span class="k">Dấu hiệu sinh tồn:</span> ${vsText(p.vs)}<br><span class="k">Bilan:</span> ${flT}</div>
     <div class="pl1"><span class="k">Khám lâm sàng:</span> ${pv(p.course)}<br><span class="k">Cận lâm sàng:</span> ${pv(p.labsum)}</div>`;
+  /* thang điểm đã chấm trong công cụ HSTC (SOFA, NEWS2…): chỉ in khi có */
+  const hx = hstcList(p);
+  if(hx.length) o += `<div class="pl1"><span class="k">Thang điểm (công cụ HSTC):</span> ${hx.map(x => `<b>${esc(x.scale || x.code)}</b> ${esc(x.tag)}${x.band ? ' – ' + esc(x.band) : ''} <small>(${esc(hstcWhen(x))})</small>`).join(' · ')}</div>`;
   if(p.unchanged) o += `<div class="pl1"><b>☒ Không thay đổi so với kíp trước</b> (chỉ ghi DHST, bilan và mục R)</div>`;
   else {
     o += `<div class="pr"><div class="lt S">S</div><div class="tx">${s.time ? 'Lúc ' + esc(s.time) + ': ' : ''}${pv(s.text)}</div></div>`;
