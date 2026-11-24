@@ -760,10 +760,11 @@ function dwellDays(date, time, kip){
 }
 /* ================= LIÊN KẾT CÔNG CỤ TÍNH ĐIỂM HSTC (icusuite) =================
    Hai công cụ cùng địa chỉ gốc (tancndd0074-svg.github.io/bangiao và /icusuite).
-   - Nút "Chấm điểm HSTC" ở thẻ BN phiếu điều dưỡng: để thông tin BN vào localStorage (HS_OUT) rồi mở công cụ HSTC;
+   - Nút "Các thang điểm HSTC" ở thẻ BN (phiếu điều dưỡng và phiếu bác sĩ): để thông tin BN vào localStorage (HS_OUT) rồi mở công cụ HSTC;
      bên đó đọc một lần rồi xóa — tên BN không nằm trên đường link.
-   - Chấm xong, công cụ HSTC xếp điểm vào hộp thư HS_IN; phiếu tự lấy về: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse
-     điền vào ô sẵn có ở mục B; thang điểm khác vào khung "Các thang điểm khác đã chấm trong công cụ HSTC". */
+   - Chấm xong, công cụ HSTC xếp điểm vào hộp thư HS_IN; điểm về đúng phiếu đã mở công cụ:
+     phiếu ĐD: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse điền vào ô sẵn có ở mục B, thang điểm khác vào khung riêng;
+     phiếu BS: GCS điền vào ô GCS (mục Thần kinh), các thang điểm khác vào khung "Thang điểm đã chấm trong công cụ HSTC". */
 const HS_OUT = 'bg.hstcHandoff', HS_IN = 'bg.hstcInbox';
 const HSTC_URL = () => new URL('../icusuite/', location.href).href;
 /* thang điểm của công cụ HSTC → ô có sẵn trong phiếu (mục B) */
@@ -781,7 +782,7 @@ function hstcOpen(h, p){
   if(!h || !p) return;
   const miss = [!filled(p.name) && 'họ tên', !filled(p.age) && 'tuổi', !filled(p.bed) && 'số giường'].filter(Boolean);
   try {
-    localStorage.setItem(HS_OUT, JSON.stringify({ v:1, at:Date.now(), hid:h.id, lk:p.lk, pid:p.id, mrn:p.mrn || '', name:p.name || '', age:p.age || '', bed:padBed(p.bed) || '', by:ME.name || '', email:ME.email || '' }));
+    localStorage.setItem(HS_OUT, JSON.stringify({ v:1, at:Date.now(), hid:h.id, part:h.part, lk:p.lk, pid:p.id, mrn:p.mrn || '', name:p.name || '', age:p.age || '', bed:padBed(p.bed) || '', by:ME.name || '', email:ME.email || '' }));
     if(ME.email) localStorage.setItem('hstc.lastEmail', ME.email);
   } catch(e){ toast('Trình duyệt đang chặn bộ nhớ: không chuyển được thông tin sang công cụ HSTC'); return; }
   let w = null; try { w = window.open('', 'icusuite'); } catch(e){}
@@ -792,28 +793,31 @@ function hstcOpen(h, p){
 }
 function hstcList(p){ return Object.entries((p && p.hstc) || {}).map(([k, x]) => Object.assign({ k }, x)).sort((a, b) => String(b.stamp || '').localeCompare(String(a.stamp || ''))); }
 function hstcWhen(x){ const m = String(x.stamp || '').match(/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/); return m ? `${m[4]}:${m[5]} ${m[3]}/${m[2]}` : (x.when || ''); }
-function hstcBox(p, i){
+function hstcBox(p, i, part){
   const L = hstcList(p), at = Object.entries(p.hstcAt || {}).filter(([f]) => HSTC_FIELD[f]).sort((a, b) => String(b[1]).localeCompare(String(a[1])));
   const rows = L.map(x => `<div class="hx-r"><b>${esc(x.scale || x.code)}</b><span class="v">${esc(x.tag)}</span><span class="bd">${esc(x.band || '')}</span>${LOCK ? '<span></span>' : `<button type="button" class="btn sm ghost del" data-act="rmHstc" data-i="${i}" data-k="${esc(x.k)}" title="Bỏ khỏi phiếu (bản ghi bên công cụ HSTC vẫn giữ)" aria-label="Bỏ ${esc(x.scale || x.code)}">✕</button>`}<small>Chấm lúc ${esc(hstcWhen(x))}${x.by ? ' · ' + esc(x.by) : ''}</small></div>`).join('');
-  return `<div class="hx">${rows || `<div class="hx-e">Chưa có. Bấm “📊 Chấm điểm HSTC” ở đầu thẻ: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse tự điền vào các ô phía trên; thang điểm khác (NEWS2, SOFA, NRS-2002, VIP…) hiện ở đây.</div>`}</div>`
+  const e = part === 'bs' ? 'Chưa có. Bấm “📊 Các thang điểm HSTC” ở đầu thẻ: GCS tự điền vào ô GCS (mục Thần kinh); các thang điểm khác (SOFA, NEWS2, RASS, CPOT, CAM-ICU, NRS-2002…) hiện ở đây.'
+    : 'Chưa có. Bấm “📊 Các thang điểm HSTC” ở đầu thẻ: GCS, RASS, VAS/CPOT, CAM-ICU, Braden, Morse tự điền vào các ô phía trên; thang điểm khác (NEWS2, SOFA, NRS-2002, VIP…) hiện ở đây.';
+  return `<div class="hx">${rows || `<div class="hx-e">${e}</div>`}</div>`
     + (at.length ? `<div class="hx-auto">↻ Tự điền từ công cụ HSTC: ${at.map(([f, s]) => `${HSTC_FIELD[f]} lúc ${esc(hstcWhen({ stamp:s }))}`).join(' · ')}</div>` : '');
 }
-/* tìm BN đích: đúng phiếu & BN đã mở công cụ; phiếu đó đã ký khóa hoặc không còn thì sang phiếu ĐD mới nhất chưa khóa có cùng BN */
+/* tìm BN đích: đúng phiếu & BN đã mở công cụ; phiếu đó đã ký khóa hoặc không còn thì sang phiếu cùng loại (BS / ĐD) mới nhất chưa khóa có cùng BN */
 function hstcTarget(x){
   const mk = v => String(v || '').toUpperCase().replace(/\s+/g, '');
   const same = q => (x.lk && q.lk === x.lk) || q.id === x.pid || (mk(x.mrn) && mk(q.mrn) === mk(x.mrn));
-  const h0 = DB.handovers.find(h => h.id === x.hid && h.part === 'dd');
+  const h0 = DB.handovers.find(h => h.id === x.hid), part = (h0 && h0.part) || (x.part === 'bs' ? 'bs' : 'dd');
   if(h0 && !isLocked(h0)){ const p = h0.patients.find(same); if(p) return [h0, p]; }
-  const hs = DB.handovers.filter(h => h.part === 'dd' && !isLocked(h)).sort((a, b) => b.date.localeCompare(a.date) || (b.updated || 0) - (a.updated || 0));
+  const hs = DB.handovers.filter(h => h.part === part && !isLocked(h)).sort((a, b) => b.date.localeCompare(a.date) || (b.updated || 0) - (a.updated || 0));
   for(const h of hs){ const p = h.patients.find(same); if(p) return [h, p]; }
   return null;
 }
 function hstcApply(h, p, x){
   const st = x.stamp || new Date(x.sent).toISOString(), at = p.hstcAt || (p.hstcAt = {});
-  const m = HSTC_MAP[x.id] && HSTC_MAP[x.id](x);
+  /* phiếu BS: chỉ GCS có ô sẵn (mục Thần kinh); phiếu ĐD: các ô ở mục B */
+  const m = h.part === 'bs' ? (x.id === 'gcs' ? HSTC_MAP.gcs(x) : null) : HSTC_MAP[x.id] && HSTC_MAP[x.id](x);
   if(m){
     const [f, v] = m; if(at[f] && at[f] > st) return false;   /* đã có lần chấm mới hơn */
-    (p.b = p.b || {})[f] = v; at[f] = st;
+    (h.part === 'bs' ? (p.a = p.a || {}) : (p.b = p.b || {}))[f] = v; at[f] = st;
   } else {
     const H = p.hstc || (p.hstc = {}), o = H[x.id];
     if(o && o.stamp && o.stamp > st) return false;
@@ -2114,7 +2118,7 @@ function headInner(p, h){
 }
 function pcWrap(p, i, h, body){
   return `<div class="pc ${p.open?'open':''} lv-${p.level||'none'}" id="pc-${p.id}">
-    <div class="pc-top"><div class="pc-h" data-act="toggle" data-i="${i}" id="h-${p.id}">${headInner(p,h)}</div>${h.part === 'dd' ? `<button type="button" class="hstc-go" data-act="hstc" data-i="${i}" title="Mở Công cụ tính điểm HSTC với thông tin người bệnh này; điểm lưu xong tự gửi về phiếu">📊<span class="t">Chấm điểm HSTC</span></button>` : ''}${LOCK ? '' : `<button class="rm" data-act="rmP" data-i="${i}" title="Cho BN ra khỏi phiếu: chuyển khoa/viện, ra viện, tử vong hoặc xóa nhầm" aria-label="Cho BN ra khỏi phiếu">✕</button>`}</div>
+    <div class="pc-top"><div class="pc-h" data-act="toggle" data-i="${i}" id="h-${p.id}">${headInner(p,h)}</div><button type="button" class="hstc-go" data-act="hstc" data-i="${i}" title="Mở Công cụ tính điểm HSTC với thông tin người bệnh này; điểm lưu xong tự gửi về phiếu">📊<span class="t">Các thang điểm HSTC</span></button>${LOCK ? '' : `<button class="rm" data-act="rmP" data-i="${i}" title="Cho BN ra khỏi phiếu: chuyển khoa/viện, ra viện, tử vong hoặc xóa nhầm" aria-label="Cho BN ra khỏi phiếu">✕</button>`}</div>
     ${p.open ? `<div class="pc-b">${body}
       <div class="pc-f">${LOCK ? '' : `<span class="row" style="gap:6px"><button class="btn sm dan" data-act="rmP" data-i="${i}">✕ Cho BN ra khỏi phiếu</button><button class="btn sm" data-act="pullOne" data-i="${i}" title="Tìm BN này (theo mã bệnh án) ở phiếu cũ gần nhất và chép thông tin sang">⟲ Lấy thông tin cũ của BN này</button></span>`}<button class="btn sm" data-act="toggle" data-i="${i}">Thu gọn ▲</button></div>
     </div>` : ''}
@@ -2202,6 +2206,7 @@ function pcBS(p, i, h){
       <div class="sub">Khác</div>
       <div class="grid">${fld('Thủ thuật / ống / dẫn lưu', P+'a.proc', a.proc, {w:'wf'})}</div>`);
   }
+  body += `<div class="sub">Thang điểm đã chấm trong công cụ HSTC</div>${hstcBox(p, i, 'bs')}`;
   body += sbar('R', 'ĐỀ XUẤT', `
     <div class="grid">${fld('Theo dõi', P+'r.monitor', r.monitor, {w:'wf'})}</div>
     <div class="sub">Việc cần làm cho kíp sau</div>
@@ -2234,7 +2239,7 @@ function pcDD(p, i, h){
     <div class="grid g4">${fld('Braden', P+'b.braden', b.braden, {num:1, calc:calc('braden', P+'b.braden')})}${fld('Morse', P+'b.morse', b.morse, {num:1, calc:calc('morse', P+'b.morse')})}</div>
     <div class="row">${chk('Cố định BN', P+'b.restraint', b.restraint)}${chk('Cách ly', P+'b.iso', b.iso, {rr:1})}${b.iso ? `<div style="flex:1;min-width:160px">${inp(P+'b.isoText', b.isoText, {ph:'Loại cách ly / tác nhân'})}</div>` : ''}</div>
     <div class="sub">Các thang điểm khác đã chấm trong công cụ HSTC</div>
-    ${hstcBox(p, i)}`);
+    ${hstcBox(p, i, 'dd')}`);
   body += sbar('A', 'ĐÁNH GIÁ', `
     <div class="sub">Sơ đồ cơ thể · chọn ký hiệu rồi chạm lên hình</div>
     ${bodyMap(p, i)}
